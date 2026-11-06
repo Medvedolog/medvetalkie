@@ -45,6 +45,10 @@ for patch in "${patches[@]}"; do
     file=${patch##*/}
     id=${file%%-*}
     selection=review
+    if [[ "$id" == 290 ]]; then
+        patch=$(realpath "$(dirname "$0")/../patches/290-per-interface-mac-armbian.patch")
+        [[ -r "$patch" ]] || { echo "Armbian 290 patch missing" >&2; exit 1; }
+    fi
     if [[ "$id" == 030 ]]; then
         patch=$(realpath "$(dirname "$0")/../patches/030-cfg80211-netdev-locking-armbian.patch")
         [[ -r "$patch" ]] || { echo "Armbian 030 patch missing" >&2; exit 1; }
@@ -55,7 +59,8 @@ for patch in "${patches[@]}"; do
         020) selection=optional-build-flag ;;
         030) selection=armbian-rebased-stability ;;
         070|130|160|190|220|250|310|330) selection=stability ;;
-        180|200|290) selection=ap-sta ;;
+        290) selection=armbian-rebased-ap-sta ;;
+        180|200) selection=ap-sta ;;
         *) selection=diagnostics ;;
     esac
     targets=$(sed -n -e 's|^+++ b/||p' "$patch" | paste -sd ',' -)
