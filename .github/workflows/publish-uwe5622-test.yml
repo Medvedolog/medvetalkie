@@ -28,7 +28,7 @@ jobs:
           gh run download "$RUN_ID" --repo "$REPO" \
             -n sprdbt-tty-arm64-6.18.60-experimental -D payload
           test -s payload/sprdbt_tty.ko
-          (cd payload && sha256sum -c SHA256SUMS)
+          (cd payload && sed 's#artifact/##g' SHA256SUMS | sha256sum -c -)
           test "$(modinfo -F vermagic payload/sprdbt_tty.ko | cut -d' ' -f1)" = "6.18.60-current-sunxi64"
 
       - name: Package for public download
