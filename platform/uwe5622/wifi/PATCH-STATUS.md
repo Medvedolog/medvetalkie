@@ -75,9 +75,9 @@ GitHub Actions `UWE5622 upstream patch audit` was run with upstream
 
 | Outcome | Patch IDs | Count |
 |---|---|---:|
-| Cumulative `git apply` accepted | 020, 030 (Armbian-rebased), 060, 090, 120, 130, 140, 150, 160, 170, 180, 190, 200, 220, 250, 280, 310, 330 | 18 |
+| Cumulative `git apply` accepted | 020, 030 (Armbian-rebased), 060, 090, 120, 130, 140, 150, 160, 170, 180, 190, 200, 220, 250, 280, 290 (Armbian-rebased), 310, 320, 330 | 20 |
 | Reverse check accepted (present) | 070 | 1 |
-| Conflicted | 210, 230, 240, 260, 270, 290, 300, 320 | 8 |
+| Conflicted | 210, 230, 240, 260, 270, 300 | 6 |
 | Intentionally excluded | 010, 080, 110 | 3 |
 
 The conflicts describe this **cumulative order** only. Several diagnostic
@@ -89,6 +89,11 @@ pristine upstream check and cumulative patch application. This addresses the
 previous source conflict, not the need for a kernel compile and hardware AP
 lifecycle test. `130`, `160`, `190`, `220`, `250` and `330` also pass source
 patch application checks, but are not compiled or tested on hardware.
+
+**AP+STA improvement:** Rebased `290` on the native Armbian source by removing
+its dependency on OpenWrt-only lean profile `110`. The rebase also lets `320`
+apply in series. Validate AP and STA interface MACs and WPA negotiation on
+the board before enabling a repeater mode.
 
 ## Automated audit
 
