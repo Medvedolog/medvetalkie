@@ -67,6 +67,27 @@ status column is an inspection decision, **not proof of successful patch apply**
 These observations warrant a patch review; they do not establish functional
 equivalence or actual deployed-module provenance.
 
+## Actual static audit result (pinned sources)
+
+GitHub Actions `UWE5622 upstream patch audit` was run with upstream
+`bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880` and OpenWrt patch tree
+`29b6faf6b08a2b62097e509eb0fa62720ab48996`.
+
+| Outcome | Patch IDs | Count |
+|---|---|---:|
+| Cumulative `git apply` accepted | 020, 060, 090, 120, 130, 140, 150, 160, 170, 180, 190, 200, 220, 250, 280, 310, 330 | 17 |
+| Reverse check accepted (present) | 070 | 1 |
+| Conflicted | 030, 210, 230, 240, 260, 270, 290, 300, 320 | 9 |
+| Intentionally excluded | 010, 080, 110 | 3 |
+
+The conflicts describe this **cumulative order** only. Several diagnostic
+patches alter the same `wl_core.c` debugfs block; apply order and dependencies
+must be reviewed before deciding whether to rebase them.
+
+**P0 block:** `030` is not yet rebased; do not represent AP lifecycle
+locking as fixed. `130`, `160`, `190`, `220`, `250` and `330` pass
+source patch application checks, but are not compiled or tested on hardware.
+
 ## Automated audit
 
 The `UWE5622 upstream patch audit` workflow checks out both repositories
