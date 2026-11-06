@@ -26,6 +26,8 @@ jobs:
             dash -n "$f"
             shellcheck -s sh "$f"
           done
+          bash -n platform/uwe5622/wifi/scripts/build-wifi-modules.sh
+          shellcheck -s bash platform/uwe5622/wifi/scripts/build-wifi-modules.sh
           bash -n platform/uwe5622/wifi/tests/audit-patches.sh
           shellcheck -s bash platform/uwe5622/wifi/tests/audit-patches.sh
           sh platform/uwe5622/wifi/tests/recovery-smoke.sh
