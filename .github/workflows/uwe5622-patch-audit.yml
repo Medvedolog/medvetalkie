@@ -33,6 +33,18 @@ jobs:
           git -C "$RUNNER_TEMP/uwe-openwrt" checkout --quiet "$OPENWRT_SHA"
           test "$(git -C "$RUNNER_TEMP/uwe-upstream" rev-parse HEAD)" = "$UPSTREAM_SHA"
           test "$(git -C "$RUNNER_TEMP/uwe-openwrt" rev-parse HEAD)" = "$OPENWRT_SHA"
+      - name: Check selected conflicts against unmodified upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          for id in 030 290; do
+            patch=$(find "$RUNNER_TEMP/uwe-openwrt/package/kernel/uwe5622/patches" -name "$id-*.patch" -print -quit)
+            if git -C "$RUNNER_TEMP/uwe-upstream" apply --check --recount -- "$patch"; then
+              echo "::notice::pristine upstream: $id applies cleanly"
+            else
+              echo "::warning::pristine upstream: $id requires rebasing"
+            fi
+          done
       - name: Audit 30 patches without building modules
         shell: bash
         run: |
