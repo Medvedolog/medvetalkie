@@ -26,6 +26,8 @@ jobs:
             dash -n "$f"
             shellcheck -s sh "$f"
           done
+          bash -n platform/uwe5622/wifi/tests/audit-patches.sh
+          shellcheck -s bash platform/uwe5622/wifi/tests/audit-patches.sh
           sh platform/uwe5622/wifi/tests/recovery-smoke.sh
           sh platform/uwe5622/wifi/scripts/uwe5622-preflight dry-run
       - name: Verify automated recovery is inactive
