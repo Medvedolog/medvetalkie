@@ -1,0 +1,105 @@
+diff --git a/tty-sdio/tty.c b/tty-sdio/tty.c
+--- a/tty-sdio/tty.c
++++ b/tty-sdio/tty.c
+@@ -86,6 +86,16 @@
+ 
+ static bool is_dumped;
+ static bool is_user_debug;
++
++/* Diagnostic counters; one frame type observed per incoming SDIO block. */
++static atomic64_t mtty_rx_blocks = ATOMIC64_INIT(0);
++static atomic64_t mtty_rx_type_sco = ATOMIC64_INIT(0);
++static atomic64_t mtty_rx_type_acl = ATOMIC64_INIT(0);
++static atomic64_t mtty_rx_type_event = ATOMIC64_INIT(0);
++static atomic64_t mtty_rx_type_other = ATOMIC64_INIT(0);
++static atomic64_t mtty_rx_tty_partial = ATOMIC64_INIT(0);
++static atomic64_t mtty_rx_queue_used = ATOMIC64_INIT(0);
++static atomic64_t mtty_rx_queue_alloc_fail = ATOMIC64_INIT(0);
+ bt_host_data_dump *data_dump;
+ 
+ static ssize_t dumpmem_store(struct device *dev,
+@@ -115,8 +125,27 @@
+ 
+ static DEVICE_ATTR_WO(dumpmem);
+ 
++static ssize_t hci_rx_stats_show(struct device *dev,
++	struct device_attribute *attr, char *buf)
++{
++	return scnprintf(buf, PAGE_SIZE,
++		"sdio_blocks=%lld\\nfirst_h4_sco=%lld\\nfirst_h4_acl=%lld\\n"
++		"first_h4_event=%lld\\nfirst_h4_other=%lld\\n"
++		"tty_partial=%lld\\nqueued=%lld\\nqueue_alloc_fail=%lld\\n",
++		(long long)atomic64_read(&mtty_rx_blocks),
++		(long long)atomic64_read(&mtty_rx_type_sco),
++		(long long)atomic64_read(&mtty_rx_type_acl),
++		(long long)atomic64_read(&mtty_rx_type_event),
++		(long long)atomic64_read(&mtty_rx_type_other),
++		(long long)atomic64_read(&mtty_rx_tty_partial),
++		(long long)atomic64_read(&mtty_rx_queue_used),
++		(long long)atomic64_read(&mtty_rx_queue_alloc_fail));
++}
++static DEVICE_ATTR_RO(hci_rx_stats);
++
+ static struct attribute *bluetooth_attrs[] = {
+ 	&dev_attr_dumpmem.attr,
++	&dev_attr_hci_rx_stats.attr,
+ 	NULL,
+ };
+ 
+@@ -265,6 +294,23 @@
+ 	bt_wakeup_host();
+ #endif
+ 	block_size = ((head->buf[2] & 0x7F) << 9) + (head->buf[1] << 1) + (head->buf[0] >> 7);
++	atomic64_inc(&mtty_rx_blocks);
++	if (block_size > 0) {
++		switch (((u8 *)head->buf)[BT_SDIO_HEAD_LEN]) {
++		case 0x02:
++			atomic64_inc(&mtty_rx_type_acl);
++			break;
++		case 0x03:
++			atomic64_inc(&mtty_rx_type_sco);
++			break;
++		case 0x04:
++			atomic64_inc(&mtty_rx_type_event);
++			break;
++		default:
++			atomic64_inc(&mtty_rx_type_other);
++			break;
++		}
++	}
+ 
+ 	if (log_level == MTTY_LOG_LEVEL_VER) {
+ 		BT_VER("%s dump head: %d, channel: %d, num: %d\n", __func__, BT_SDIO_HEAD_LEN, chn, num);
+@@ -293,6 +339,8 @@
+ 			BT_VER("%s ret: %d, len: %d\n", __func__, ret, block_size);
+ 			if (ret)
+ 				tty_flip_buffer_push(mtty_dev->port);
++			if (ret != block_size)
++				atomic64_inc(&mtty_rx_tty_partial);
+ 			if (ret == (block_size)) {
+ 				BT_VER("%s send success", __func__);
+ 				sprdwcn_bus_push_list(chn, head, tail, num);
+@@ -303,6 +351,7 @@
+ 		rx = kmalloc(sizeof(struct rx_data), GFP_KERNEL);
+ 		if (rx == NULL) {
+ 			pr_err("%s rx == NULL\n", __func__);
++			atomic64_inc(&mtty_rx_queue_alloc_fail);
+ 			sprdwcn_bus_push_list(chn, head, tail, num);
+ 			return -ENOMEM;
+ 		}
+@@ -315,6 +364,7 @@
+ 		rx->head->buf = kmalloc(rx->head->len, GFP_KERNEL);
+ 		if (rx->head->buf == NULL) {
+ 			pr_err("mtty low memory!\n");
++			atomic64_inc(&mtty_rx_queue_alloc_fail);
+ 			kfree(rx);
+ 			sprdwcn_bus_push_list(chn, head, tail, num);
+ 			return -ENOMEM;
+@@ -325,6 +375,7 @@
+ 		mutex_lock(&mtty_dev->rw_mutex);
+ 		pr_err("mtty over load push %d -> %d, channel: %d len: %d\n",
+ 			block_size, ret, rx->channel, rx->head->len);
++		atomic64_inc(&mtty_rx_queue_used);
+ 		list_add_tail(&rx->entry, &mtty_dev->rx_head);
+ 		mutex_unlock(&mtty_dev->rw_mutex);
+ 		if (!work_pending(&mtty_dev->bt_rx_work)) {
