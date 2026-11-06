@@ -30,7 +30,7 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             make gcc libc6-dev bison flex libssl-dev libelf-dev bc git curl patch \
-            binutils kmod file dwarves ca-certificates xz-utils
+            binutils kmod file dwarves ca-certificates xz-utils python3-minimal
           gcc --version | head -1
 
       - uses: actions/checkout@v4
