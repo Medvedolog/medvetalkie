@@ -1,0 +1,34 @@
+name: UWE5622 Wi-Fi safety checks
+
+on:
+  push:
+    paths:
+      - 'platform/uwe5622/wifi/**'
+      - '.github/workflows/uwe5622-wifi.yml'
+  pull_request:
+    paths:
+      - 'platform/uwe5622/wifi/**'
+      - '.github/workflows/uwe5622-wifi.yml'
+
+jobs:
+  shell-validation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Verify shell syntax and read-only dry run
+        run: |
+          set -eu
+          for f in platform/uwe5622/wifi/scripts/uwe5622-preflight platform/uwe5622/wifi/scripts/uwe5622-recover platform/uwe5622/wifi/tests/recovery-smoke.sh; do
+            dash -n "$f"
+            shellcheck -s sh "$f"
+          done
+          sh platform/uwe5622/wifi/tests/recovery-smoke.sh
+          sh platform/uwe5622/wifi/scripts/uwe5622-preflight dry-run
+      - name: Verify automated recovery is inactive
+        run: |
+          ! grep -Eq '^[[:space:]]*ACTION==' platform/uwe5622/wifi/scripts/90-uwe5622-recover.rules.example
+          ! grep -Eq '^\[Install\]' platform/uwe5622/wifi/scripts/medvetalkie-uwe5622-recover.service
