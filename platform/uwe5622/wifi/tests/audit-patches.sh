@@ -45,11 +45,16 @@ for patch in "${patches[@]}"; do
     file=${patch##*/}
     id=${file%%-*}
     selection=review
+    if [[ "$id" == 030 ]]; then
+        patch=$(realpath "$(dirname "$0")/../patches/030-cfg80211-netdev-locking-armbian.patch")
+        [[ -r "$patch" ]] || { echo "Armbian 030 patch missing" >&2; exit 1; }
+    fi
     case "$id" in
         010|080) selection=openwrt-cfg80211; result=skip ;;
         110) selection=openwrt-lean; result=skip ;;
         020) selection=optional-build-flag ;;
-        030|070|130|160|190|220|250|310|330) selection=stability ;;
+        030) selection=armbian-rebased-stability ;;
+        070|130|160|190|220|250|310|330) selection=stability ;;
         180|200|290) selection=ap-sta ;;
         *) selection=diagnostics ;;
     esac
