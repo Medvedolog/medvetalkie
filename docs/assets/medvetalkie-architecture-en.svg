@@ -35,7 +35,7 @@
 <rect width="1760" height="1220" fill="#fbfcfe"/>
 <!-- unobtrusive, readable heading -->
 <text x="56" y="78" class="title">MedveTalkie</text>
-<text x="56" y="116" class="subtitle">Universal Bluetooth intercom & audio hub · Orange Pi Zero 3 prototype</text>
+<text x="56" y="116" class="subtitle">Universal Bluetooth intercom &amp; audio hub · Orange Pi Zero 3 prototype</text>
 <line x1="56" y1="145" x2="1704" y2="145" class="divider"/>
 
 <!-- headset panel -->
