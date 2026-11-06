@@ -28,9 +28,10 @@ OUT=$(realpath "$OUT")
 
 apply_patch() {
   local num=$1 file
-  if [[ "$num" == 030 || "$num" == 290 ]]; then
+  if [[ "$num" == 030 || "$num" == 160 || "$num" == 290 ]]; then
     case "$num" in
       030) file="$SCRIPT_DIR/../patches/030-cfg80211-netdev-locking-armbian.patch" ;;
+      160) file="$SCRIPT_DIR/../patches/160-prepare-addba-armbian.patch" ;;
       290) file="$SCRIPT_DIR/../patches/290-per-interface-mac-armbian.patch" ;;
     esac
   else
