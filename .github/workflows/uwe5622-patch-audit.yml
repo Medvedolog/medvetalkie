@@ -45,5 +45,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: uwe5622-static-patch-audit
-          path: ${{ runner.temp }}/uwe5622-patch-audit.md
+          path: |
+            ${{ runner.temp }}/uwe5622-patch-audit.md
+            ${{ runner.temp }}/uwe5622-patch-conflicts.txt
           retention-days: 14
