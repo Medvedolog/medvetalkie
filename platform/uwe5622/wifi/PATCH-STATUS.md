@@ -88,12 +88,14 @@ must be reviewed before deciding whether to rebase them.
 pristine upstream check and cumulative patch application. This addresses the
 previous source conflict, not the need for a kernel compile and hardware AP
 lifecycle test. `130`, `160`, `190`, `220`, `250` and `330` also pass source
-patch application checks, but are not compiled or tested on hardware.
+patch application checks. Selected P0 and AP+STA subsets have since compiled
+successfully against the pinned Armbian 6.18.60 headers; neither profile has
+been tested on physical hardware.
 
 **AP+STA improvement:** Rebased `290` on the native Armbian source by removing
 its dependency on OpenWrt-only lean profile `110`. The rebase also lets `320`
-apply in series. Validate AP and STA interface MACs and WPA negotiation on
-the board before enabling a repeater mode.
+apply in series. The selected AP+STA build profile now compiles, but AP and
+STA interface MACs and WPA negotiation remain unverified on hardware.
 
 ## Automated audit
 
@@ -118,3 +120,16 @@ patch may cause subsequent conflicts.
 
 Passing a source patch check, including all 30 patches, is **not** proof of
 correct functionality, valid ABI, or safe SDIO reset.
+
+## Native ARM64 selected-profile build result
+
+The **selected** P0 profile (030,130,160,190,220,250,330) and expanded AP+STA
+profile (P0 plus 180,200,290,310) both compiled successfully in
+[GitHub Actions run 42297501633](https://github.com/Medvedolog/medvetalkie/actions/runs/42297501633)
+for the pinned 6.18.60-current-sunxi64 headers. Patch 070 is already in the
+upstream source. The P0 build uses Armbian-specific versions of 030,160,190;
+AP+STA additionally uses the Armbian-specific 290.
+
+This does **not** compile all 20 individually applicable patches: optional
+statistics and debugfs patches are deliberately absent. No hardware validation
+or loaded-module ABI comparison has occurred.
