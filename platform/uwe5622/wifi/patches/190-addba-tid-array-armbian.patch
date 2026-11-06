@@ -36,10 +36,11 @@ diff --git a/unisocwifi/wl_core.h b/unisocwifi/wl_core.h
 index ab3537b..5969291 100644
 --- a/unisocwifi/wl_core.h
 +++ b/unisocwifi/wl_core.h
-@@ -77,4 +77,5 @@ struct sprdwl_peer_entry {
+@@ -77,5 +77,6 @@ struct sprdwl_peer_entry {
  	unsigned long ba_tx_done_map;
  	u8 vowifi_enabled;
  	u8 vowifi_pkt_cnt;
 -	struct timespec time[6 + 1];
 +	/* last ADDBA attempt per TID (prepare_addba() indexes this by TID) */
 +	struct timespec time[IEEE80211_NUM_TIDS];
+ };
