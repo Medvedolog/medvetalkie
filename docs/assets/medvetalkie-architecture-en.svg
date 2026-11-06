@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1760" height="1220" viewBox="0 0 1760 1220" role="img" aria-labelledby="title desc">
+<title id="title">MedveTalkie — detailed prototype architecture</title>
+<desc id="desc">Detailed system architecture: two Bluetooth headsets, independent controllers, Orange Pi Zero 3, C11 services, BlueZ/PipeWire, Android, Wi-Fi, FM ATS Mini V4, ST7789 display, HDMI, and power.</desc>
+<defs>
+<style><![CDATA[
+  text { font-family: 'DejaVu Sans', Arial, sans-serif; fill:#1c2c42; }
+  .title {font-size:46px;font-weight:700;letter-spacing:-1px}
+  .subtitle {font-size:21px;fill:#52647c}
+  .section {font-size:25px;font-weight:700}
+  .label {font-size:22px;font-weight:700}
+  .body {font-size:18px}
+  .small {font-size:16px;fill:#52647c}
+  .micro {font-size:14px;fill:#52647c}
+  .mono {font-family:'DejaVu Sans Mono',monospace;font-size:18px;font-weight:bold}
+  .outline {stroke:#cbd6e4;stroke-width:2;fill:#fff}
+  .headset {fill:#eef6ff;stroke:#78a9e9;stroke-width:2}
+  .bt {fill:#edf9f4;stroke:#6bbd9a;stroke-width:2}
+  .processor {fill:#fffaf2;stroke:#e3ae63;stroke-width:2.5}
+  .interface {fill:#f6f0ff;stroke:#b69de0;stroke-width:2}
+  .media {fill:#f0f7ff;stroke:#92b6e5;stroke-width:2}
+  .radio {fill:#fef5eb;stroke:#e8b383;stroke-width:2}
+  .energy {fill:#f1f7ed;stroke:#9abd8c;stroke-width:2}
+  .service {fill:#fff;stroke:#d1bf9f;stroke-width:1.5}
+  .divider {stroke:#d8e0ea;stroke-width:2}
+  .bus {fill:none;stroke:#38658d;stroke-width:3.6;stroke-linejoin:round;stroke-linecap:round}
+  .aux {fill:none;stroke:#8d70ba;stroke-width:3.2;stroke-linejoin:round;stroke-linecap:round}
+  .audio {fill:none;stroke:#ad784a;stroke-width:3.3;stroke-linejoin:round;stroke-linecap:round}
+  .network {fill:none;stroke:#3c9b85;stroke-width:3.3;stroke-linejoin:round;stroke-linecap:round}
+]]></style>
+<marker id="arrow" viewBox="0 0 10 10" refX="8.2" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#38658d"/></marker>
+<marker id="arrowAux" viewBox="0 0 10 10" refX="8.2" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#8d70ba"/></marker>
+<marker id="arrowAudio" viewBox="0 0 10 10" refX="8.2" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#ad784a"/></marker>
+<marker id="arrowNet" viewBox="0 0 10 10" refX="8.2" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="#3c9b85"/></marker>
+</defs>
+<rect width="1760" height="1220" fill="#fbfcfe"/>
+<!-- unobtrusive, readable heading -->
+<text x="56" y="78" class="title">MedveTalkie</text>
+<text x="56" y="116" class="subtitle">Universal Bluetooth intercom & audio hub · Orange Pi Zero 3 prototype</text>
+<line x1="56" y1="145" x2="1704" y2="145" class="divider"/>
+
+<!-- headset panel -->
+<rect x="50" y="183" width="290" height="460" rx="18" class="headset"/>
+<text x="74" y="222" class="section">Headsets</text>
+<text x="74" y="249" class="small">Any HFP-compatible model</text>
+<rect x="70" y="280" width="250" height="140" rx="14" fill="white" stroke="#bfd5ef"/>
+<g transform="translate(86 303)" stroke="#2f6294" fill="none" stroke-width="5" stroke-linecap="round"><path d="M12 43 V29 A30 30 0 0 1 72 29 V43"/><rect x="6" y="38" width="16" height="30" rx="7" fill="#cee5ff"/><rect x="62" y="38" width="16" height="30" rx="7" fill="#cee5ff"/></g>
+<text x="186" y="328" class="label">#1</text><text x="186" y="355" class="body">HFP: voice</text><text x="186" y="378" class="small">A2DP: stereo</text>
+<rect x="70" y="442" width="250" height="140" rx="14" fill="white" stroke="#bfd5ef"/>
+<g transform="translate(86 467)" stroke="#2f6294" fill="none" stroke-width="5" stroke-linecap="round"><path d="M12 43 V29 A30 30 0 0 1 72 29 V43"/><rect x="6" y="38" width="16" height="30" rx="7" fill="#cee5ff"/><rect x="62" y="38" width="16" height="30" rx="7" fill="#cee5ff"/></g>
+<text x="186" y="493" class="label">#2</text><text x="186" y="520" class="body">HFP: voice</text><text x="186" y="543" class="small">Or Android</text>
+<text x="74" y="616" class="micro">Not limited to Airide / Honor</text>
+
+<!-- controller panel -->
+<rect x="378" y="183" width="295" height="460" rx="18" class="bt"/>
+<text x="402" y="222" class="section">Bluetooth</text>
+<text x="402" y="250" class="small">Independent controllers</text>
+<rect x="398" y="282" width="255" height="130" rx="14" fill="white" stroke="#a5d9bd"/>
+<text x="418" y="319" class="label">Controller 1</text>
+<text x="418" y="348" class="body">Built-in AW859A</text>
+<text x="418" y="377" class="small">or external USB-BT</text>
+<rect x="398" y="446" width="255" height="130" rx="14" fill="white" stroke="#a5d9bd"/>
+<text x="418" y="483" class="label">Controller 2</text>
+<text x="418" y="512" class="body">External USB-BT</text>
+<text x="418" y="541" class="small">Classic · SCO / eSCO</text>
+<text x="402" y="613" class="micro">Stable identity (not hci0/hci1)</text>
+
+<!-- central main device -->
+<rect x="720" y="183" width="565" height="650" rx="20" class="processor"/>
+<text x="746" y="227" class="section">Orange Pi Zero 3</text>
+<text x="746" y="257" class="body">Allwinner H618 · Armbian CLI · 1 GB RAM</text>
+<rect x="740" y="281" width="525" height="108" rx="13" class="service"/>
+<text x="760" y="315" class="mono">medvetalkied</text>
+<text x="760" y="343" class="body">C11 core daemon · modes · SQLite</text>
+<text x="760" y="369" class="small">CivetWeb · HTTP/WebSocket · Unix IPC</text>
+<rect x="740" y="402" width="525" height="96" rx="13" class="service"/>
+<text x="760" y="437" class="mono">medvetalkie-bt</text>
+<text x="760" y="466" class="body">BlueZ / D-Bus · HFP · pairing</text>
+<rect x="740" y="510" width="525" height="96" rx="13" class="service"/>
+<text x="760" y="545" class="mono">PipeWire + WirePlumber</text>
+<text x="760" y="574" class="body">2 mics ↔ 2 outputs · audio mixer</text>
+<rect x="740" y="618" width="525" height="94" rx="13" class="service"/>
+<text x="760" y="652" class="mono">medvetalkie-ui</text>
+<text x="760" y="681" class="body">LVGL · SPI / HDMI · GPIO buttons</text>
+<line x1="744" y1="734" x2="1261" y2="734" class="divider"/>
+<text x="755" y="765" class="small">systemd · process isolation · recovery</text>
+<text x="755" y="795" class="small">Audio streams bypass the Web/API</text>
+
+<!-- output interfaces right -->
+<rect x="1336" y="183" width="373" height="650" rx="18" class="interface"/>
+<text x="1362" y="222" class="section">Interfaces</text>
+<rect x="1356" y="257" width="333" height="119" rx="13" fill="white" stroke="#d5c7ef"/>
+<text x="1378" y="292" class="label">2.0″ IPS ST7789</text>
+<text x="1378" y="320" class="body">320×240 · SPI · no touch</text>
+<text x="1378" y="349" class="small">5-way joystick + 4 buttons</text>
+<rect x="1356" y="395" width="333" height="119" rx="13" fill="white" stroke="#d5c7ef"/>
+<text x="1378" y="430" class="label">Web dashboard</text>
+<text x="1378" y="458" class="body">Configure from Android</text>
+<text x="1378" y="487" class="small">AP · password · QR code</text>
+<rect x="1356" y="533" width="333" height="119" rx="13" fill="white" stroke="#d5c7ef"/>
+<text x="1378" y="568" class="label">HDMI</text>
+<text x="1378" y="596" class="body">Display simulator</text>
+<text x="1378" y="625" class="small">Retro games · later</text>
+<rect x="1356" y="671" width="333" height="119" rx="13" fill="white" stroke="#d5c7ef"/>
+<text x="1378" y="706" class="label">Modes</text>
+<text x="1378" y="734" class="body">Intercom / A2DP</text>
+<text x="1378" y="763" class="small">Radio · Android bridge (trial)</text>
+
+<!-- main connectors -->
+<path d="M320 350 H397" class="bus" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<path d="M320 510 H397" class="bus" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<path d="M653 345 H696 V452 H740" class="bus" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<path d="M653 510 H696 V467 H740" class="bus" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<text x="340" y="333" class="micro">HFP</text><text x="340" y="493" class="micro">HFP</text>
+<path d="M1265 662 H1321 V316 H1356" class="aux" marker-end="url(#arrowAux)"/>
+<path d="M1265 327 H1312 V455 H1356" class="aux" marker-end="url(#arrowAux)"/>
+<path d="M1265 685 H1304 V594 H1356" class="aux" marker-end="url(#arrowAux)"/>
+<path d="M1265 760 H1330 V732 H1356" class="aux" marker-end="url(#arrowAux)"/>
+
+<!-- bottom accessory panels -->
+<rect x="50" y="877" width="484" height="205" rx="17" class="radio"/>
+<text x="73" y="919" class="section">FM radio · ATS Mini V4</text>
+<text x="73" y="955" class="body">Removable Si4732 radio + RDS</text>
+<text x="73" y="989" class="body">Analog L/R → stereo USB ADC</text>
+<text x="73" y="1023" class="small">USB serial control — optional</text>
+<text x="73" y="1053" class="small">RDS shown on radio's own display</text>
+<rect x="570" y="877" width="499" height="205" rx="17" class="media"/>
+<text x="592" y="919" class="section">Android and Wi-Fi</text>
+<text x="592" y="955" class="body">5 GHz STA → internet radio</text>
+<text x="592" y="989" class="body">Button-enabled AP → phone setup</text>
+<text x="592" y="1023" class="small">Android BT: A2DP, later HFP bridge</text>
+<text x="592" y="1053" class="small">WLAN patches: opiz3-wlan-backport</text>
+<rect x="1105" y="877" width="604" height="205" rx="17" class="energy"/>
+<text x="1128" y="919" class="section">Power and operation</text>
+<text x="1128" y="955" class="body">5 V: power bank / vehicle power</text>
+<text x="1128" y="989" class="body">microSD: Armbian, settings, logs</text>
+<text x="1128" y="1023" class="small">CPU ondemand · cap frequency after tests</text>
+<text x="1128" y="1053" class="small">USB meter: actual power consumption</text>
+<!-- input connections run in empty gutters -->
+<path d="M499 877 V853 H865 V834" class="audio" marker-end="url(#arrowAudio)"/>
+<path d="M818 877 V844 H938 V834" class="network" marker-end="url(#arrowNet)"/>
+<path d="M1410 877 V846 H1100 V834" class="bus" marker-end="url(#arrow)"/>
+
+<!-- bottom validation note -->
+<rect x="50" y="1115" width="1659" height="73" rx="12" fill="#fff3e9" stroke="#e8b98c" stroke-width="2"/>
+<text x="77" y="1144" class="label">Status: development / bench testing</text>
+<text x="77" y="1172" class="body">Dual HFP/SCO, AW859A stability and Android bridge are unverified. Reliable voice comes first.</text>
+</svg>

@@ -10,7 +10,7 @@ The current priority is **proving stable HFP microphone + speaker operation on r
 
 ## System overview
 
-![MedveTalkie detailed prototype architecture](docs/assets/medvetalkie-architecture-v2.svg)
+![MedveTalkie detailed prototype architecture](docs/assets/medvetalkie-architecture-en.svg)
 
 *Detailed concept diagram. Bluetooth HFP dual-link capability and Android phone bridging remain subject to hardware validation.*
 
