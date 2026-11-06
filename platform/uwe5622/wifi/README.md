@@ -1,6 +1,6 @@
 # AW859A / UWE5622 Wi-Fi integration for Armbian
 
-Status: **inventory-only staging**; no driver replacement and no automatic recovery installed.
+Status: **experimental, opt-in manual CP-assert recovery staged**; no driver replacement, no installed udev trigger, no automatic recovery. See [RECOVERY.md](RECOVERY.md) for safety gates.
 
 Target test hardware: Orange Pi Zero 3 / H618, Armbian 26.11.0-trunk.120,
 Debian 13, `6.18.60-current-sunxi64`. This kernel identification comes from
