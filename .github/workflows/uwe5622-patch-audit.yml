@@ -45,6 +45,12 @@ jobs:
               echo "::warning::pristine upstream: $id requires rebasing"
             fi
           done
+      - name: Test staged Armbian-specific patch 030
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C "$RUNNER_TEMP/uwe-upstream" apply --check --recount \
+            "$GITHUB_WORKSPACE/platform/uwe5622/wifi/patches/030-cfg80211-netdev-locking-armbian.patch"
       - name: Audit 30 patches without building modules
         shell: bash
         run: |
