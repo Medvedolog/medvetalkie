@@ -26,9 +26,9 @@ diff --git a/tty-sdio/tty.c b/tty-sdio/tty.c
 +	struct device_attribute *attr, char *buf)
 +{
 +	return scnprintf(buf, PAGE_SIZE,
-+		"sdio_blocks=%lld\\nfirst_h4_sco=%lld\\nfirst_h4_acl=%lld\\n"
-+		"first_h4_event=%lld\\nfirst_h4_other=%lld\\n"
-+		"tty_partial=%lld\\nqueued=%lld\\nqueue_alloc_fail=%lld\\n",
++		"sdio_blocks=%lld\nfirst_h4_sco=%lld\nfirst_h4_acl=%lld\n"
++		"first_h4_event=%lld\nfirst_h4_other=%lld\n"
++		"tty_partial=%lld\nqueued=%lld\nqueue_alloc_fail=%lld\n",
 +		(long long)atomic64_read(&mtty_rx_blocks),
 +		(long long)atomic64_read(&mtty_rx_type_sco),
 +		(long long)atomic64_read(&mtty_rx_type_acl),
