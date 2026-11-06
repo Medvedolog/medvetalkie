@@ -30,6 +30,6 @@ Full reproduction and environment: [hardware bench report](../../docs/HARDWARE-B
 - [`0002` RX queue ownership and bounded retries](patches/0002-sprdbt-tty-fix-rx-queue-ownership.patch).
 - [Non-invasive sequential patch verification](tests/verify-patches.sh).
 
-**Important:** neither patch is a tested kernel module; do not replace the working module on the Orange Pi until the exact build revision, ABI and A2DP regression checks are complete.
+**Important:** both patches compile into an ARM64 module in [successful GitHub Actions run](https://github.com/Medvedolog/medvetalkie/actions/runs/42223637527), but **no physical device validation has been done**. Follow [guarded preflight, staged install and rollback](HARDWARE-TRIAL.md); stock module must remain recoverable.
 
 Reserve `logs/` for sanitized summaries. **Do not commit raw btsnoop traces or firmware images without reviewing identifiers and redistribution rights.**
