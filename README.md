@@ -10,9 +10,9 @@ The current priority is **proving stable HFP microphone + speaker operation on r
 
 ## System overview
 
-The original illustrated MedveTalkie prototype diagram will replace the simplified vector schematic. Until the original image is present in `docs/assets/medvetalkie-prototype.jpg`, see [architecture documentation](docs/ARCHITECTURE.md).
+![MedveTalkie detailed prototype architecture](docs/assets/medvetalkie-architecture-v2.svg)
 
-**Note on the illustration:** headset 1/2 are logical roles; AW859A is the *built-in* radio, not the model of both USB adapters. FM is an audio **input** to Orange Pi, and its physical controls are GPIO buttons.
+*Detailed concept diagram. Bluetooth HFP dual-link capability and Android phone bridging remain subject to hardware validation.*
 
 ## Planned features
 
