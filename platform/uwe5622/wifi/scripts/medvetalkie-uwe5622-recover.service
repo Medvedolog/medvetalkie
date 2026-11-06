@@ -1,0 +1,14 @@
+[Unit]
+Description=MedveTalkie UWE5622 confirmed CP-assert recovery (manual opt-in)
+Documentation=https://github.com/Medvedolog/medvetalkie
+ConditionPathExists=/etc/medvetalkie/allow-uwe5622-sdio-reset
+After=systemd-udevd.service
+StartLimitIntervalSec=1800
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/uwe5622-recover --cp-assert-confirmed
+TimeoutStartSec=150
+Nice=10
+# Do not enable this unit at boot. It is not a health watchdog.
