@@ -10,11 +10,9 @@ The current priority is **proving stable HFP microphone + speaker operation on r
 
 ## System overview
 
-![MedveTalkie prototype architecture](docs/assets/medvetalkie-architecture.svg)
+The original illustrated MedveTalkie prototype diagram will replace the simplified vector schematic. Until the original image is present in `docs/assets/medvetalkie-prototype.jpg`, see [architecture documentation](docs/ARCHITECTURE.md).
 
-*Conceptual architecture, not a tested hardware configuration. The Bluetooth controller layout is selectable, and two concurrent HFP/SCO audio links still require bench verification.*
-
-The prototype separates the control plane (C11 daemons, Unix IPC, lightweight browser UI) from the real-time audio plane (BlueZ + PipeWire). A removable ATS Mini V4 provides FM radio, and the 2-inch SPI screen is optional during early development thanks to HDMI simulation.
+**Note on the illustration:** headset 1/2 are logical roles; AW859A is the *built-in* radio, not the model of both USB adapters. FM is an audio **input** to Orange Pi, and its physical controls are GPIO buttons.
 
 ## Planned features
 
