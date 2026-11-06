@@ -15,6 +15,8 @@ jobs:
   sprdbt-tty:
     name: Native ARM64 / Armbian 6.18.60
     runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:trixie
     timeout-minutes: 35
     env:
       KVER: 6.18.60-current-sunxi64
@@ -23,14 +25,15 @@ jobs:
       HEADERS_BASE: https://repo.armbian.com/incoming/community/debs-beta
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: Install native compiler and header dependencies
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             make gcc libc6-dev bison flex libssl-dev libelf-dev bc git curl patch \
-            binutils kmod file dwarves
+            binutils kmod file dwarves ca-certificates xz-utils
+          gcc --version | head -1
+
+      - uses: actions/checkout@v4
 
       - name: Fetch exact Armbian headers (do not upgrade kernel)
         shell: bash
@@ -41,7 +44,7 @@ jobs:
           dpkg-deb -f /tmp/armbian-headers.deb Package Version Architecture
           test "$(dpkg-deb -f /tmp/armbian-headers.deb Version)" = "26.11.0-trunk.120"
           test "$(dpkg-deb -f /tmp/armbian-headers.deb Architecture)" = "arm64"
-          sudo dpkg -i /tmp/armbian-headers.deb
+          dpkg -i /tmp/armbian-headers.deb
           test -e "/lib/modules/${KVER}/build/Makefile"
           grep -Fx "#define UTS_RELEASE \"${KVER}\"" \
             "/lib/modules/${KVER}/build/include/generated/utsrelease.h"
