@@ -22,7 +22,7 @@ jobs:
       - name: Verify shell syntax and read-only dry run
         run: |
           set -eu
-          for f in platform/uwe5622/wifi/scripts/uwe5622-preflight platform/uwe5622/wifi/scripts/uwe5622-recover platform/uwe5622/wifi/tests/recovery-smoke.sh; do
+          for f in platform/uwe5622/wifi/scripts/uwe5622-preflight platform/uwe5622/wifi/scripts/uwe5622-recover platform/uwe5622/wifi/scripts/uwe5622-abi-check platform/uwe5622/wifi/tests/recovery-smoke.sh; do
             dash -n "$f"
             shellcheck -s sh "$f"
           done
@@ -30,6 +30,7 @@ jobs:
           shellcheck -s bash platform/uwe5622/wifi/tests/audit-patches.sh
           sh platform/uwe5622/wifi/tests/recovery-smoke.sh
           sh platform/uwe5622/wifi/scripts/uwe5622-preflight dry-run
+          sh platform/uwe5622/wifi/scripts/uwe5622-abi-check status
       - name: Verify automated recovery is inactive
         run: |
           ! grep -Eq '^[[:space:]]*ACTION==' platform/uwe5622/wifi/scripts/90-uwe5622-recover.rules.example
