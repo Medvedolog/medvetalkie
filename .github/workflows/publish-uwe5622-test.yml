@@ -1,0 +1,50 @@
+name: Publish UWE5622 experimental build
+
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-uwe5622-test.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RUN_ID: '42223637527'
+      RELEASE_TAG: uwe5622-hfp-test-20261106
+
+    steps:
+      - name: Fetch known-successful ARM64 module artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p payload
+          gh run download "$RUN_ID" --repo "$REPO" \
+            -n sprdbt-tty-arm64-6.18.60-experimental -D payload
+          test -s payload/sprdbt_tty.ko
+          (cd payload && sha256sum -c SHA256SUMS)
+          test "$(modinfo -F vermagic payload/sprdbt_tty.ko | cut -d' ' -f1)" = "6.18.60-current-sunxi64"
+
+      - name: Package for public download
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd payload && zip -9 ../sprdbt-tty-arm64-6.18.60-experimental.zip \
+            sprdbt_tty.ko SHA256SUMS modinfo.txt UWE5622_SOURCE_COMMIT README.txt)
+          sha256sum sprdbt-tty-arm64-6.18.60-experimental.zip
+
+      - name: Publish explicitly pre-release only
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" --repo "$REPO" \
+            --target "${GITHUB_SHA}" --prerelease \
+            --title "UWE5622 HFP/SCO experimental kernel module (6.18.60)" \
+            --notes "Experimental ARM64 sprdbt_tty.ko built with two diagnostic/queue patches. NOT tested on Orange Pi. Do not install without verifying the full vermagic and keeping the stock module for rollback. CI source run: https://github.com/Medvedolog/medvetalkie/actions/runs/42223637527" \
+            sprdbt-tty-arm64-6.18.60-experimental.zip
