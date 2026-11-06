@@ -37,7 +37,7 @@ exact equivalence with the Armbian driver source that built the stock module.**
 cd /root/medvetalkie-build
 mkdir -p artifact
 unzip -o sprdbt-tty-arm64-6.18.60-experimental.zip -d artifact
-(cd artifact && sha256sum -c SHA256SUMS)
+sha256sum -c artifact/SHA256SUMS
 uname -r
 modinfo -n sprdbt_tty
 modinfo -F vermagic "$(modinfo -n sprdbt_tty)"
