@@ -5,7 +5,7 @@ The GitHub Actions workflow
 builds **only** `uwe5622_bsp_sdio.ko` and `sprdwl_ng.ko` on a native
 ARM64 runner with the official Armbian 26.11.0-trunk.120 header package
 for `6.18.60-current-sunxi64`. The current headers package hash observed
-during CI is
+during CI and now enforced before package installation is
 `ff5247313924b0851af4983466483050b25a2434aa65f9acae99631c1c999cc6`.
 
 ## Immutable source selection
@@ -64,3 +64,7 @@ test installation.
 
 **A green CI build does not demonstrate that an ARM64 module is safe for
 a specific board.** The full-duplex BT subsystem remains out of scope.
+
+## Confirmed GitHub Actions result
+
+Native ARM64 compilation of both profiles succeeded in [run 42297501633](https://github.com/Medvedolog/medvetalkie/actions/runs/42297501633). The workflow produced `uwe5622_bsp_sdio.ko` and `sprdwl_ng.ko`, checked the first `vermagic` token and AArch64 ELF header, and uploaded quarantined artifacts. This is **build validation only**, not hardware validation or proof that the board uses the same kernel configuration and driver provenance.
