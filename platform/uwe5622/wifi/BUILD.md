@@ -1,7 +1,7 @@
 # Experimental WLAN+BSP ARM64 builds — not installable without board validation
 
 The GitHub Actions workflow
-[`uwe5622-wifi-modules.yml`](../../../../.github/workflows/uwe5622-wifi-modules.yml)
+[`uwe5622-wifi-modules.yml`](../../../.github/workflows/uwe5622-wifi-modules.yml)
 builds **only** `uwe5622_bsp_sdio.ko` and `sprdwl_ng.ko` on a native
 ARM64 runner with the official Armbian 26.11.0-trunk.120 header package
 for `6.18.60-current-sunxi64`. The current headers package hash observed
