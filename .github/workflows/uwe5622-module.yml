@@ -1,0 +1,95 @@
+name: UWE5622 Bluetooth kernel module (experimental)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/uwe5622-module.yml'
+      - 'platform/uwe5622/patches/**'
+      - 'platform/uwe5622/tests/**'
+
+permissions:
+  contents: read
+
+jobs:
+  sprdbt-tty:
+    name: Native ARM64 / Armbian 6.18.60
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 35
+    env:
+      KVER: 6.18.60-current-sunxi64
+      UWE_REF: bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880
+      HEADERS_DEB: linux-headers-current-sunxi64_26.11.0-trunk.120_arm64__6.18.60-Sf45e-D68f5-P034b-Cecfd-H0759-HK01ba-Vc222-B0577-R448a.deb
+      HEADERS_BASE: https://repo.armbian.com/incoming/community/debs-beta
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native compiler and header dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            make gcc libc6-dev bison flex libssl-dev libelf-dev bc git curl patch \
+            binutils kmod file
+
+      - name: Fetch exact Armbian headers (do not upgrade kernel)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --connect-timeout 15 --max-time 240 \
+            "${HEADERS_BASE}/${HEADERS_DEB}" -o /tmp/armbian-headers.deb
+          dpkg-deb -f /tmp/armbian-headers.deb Package Version Architecture
+          test "$(dpkg-deb -f /tmp/armbian-headers.deb Version)" = "26.11.0-trunk.120"
+          test "$(dpkg-deb -f /tmp/armbian-headers.deb Architecture)" = "arm64"
+          sudo dpkg -i /tmp/armbian-headers.deb
+          test -e "/lib/modules/${KVER}/build/Makefile"
+          grep -Fx "#define UTS_RELEASE \"${KVER}\"" \
+            "/lib/modules/${KVER}/build/include/generated/utsrelease.h"
+          test -s "/lib/modules/${KVER}/build/Module.symvers"
+
+      - name: Fetch pinned UWE5622 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none https://github.com/armbian/uwe5622.git uwe5622
+          git -C uwe5622 checkout --detach "${UWE_REF}"
+          test "$(git -C uwe5622 rev-parse HEAD)" = "${UWE_REF}"
+
+      - name: Check and apply ordered driver patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh platform/uwe5622/tests/verify-patches.sh uwe5622
+          patch -d uwe5622 -p1 < platform/uwe5622/patches/0001-sprdbt-tty-add-hci-rx-sdio-counters.patch
+          patch -d uwe5622 -p1 < platform/uwe5622/patches/0002-sprdbt-tty-fix-rx-queue-ownership.patch
+
+      - name: Compile standalone sprdbt_tty kernel module
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C "/lib/modules/${KVER}/build" \
+            M="$PWD/uwe5622/tty-sdio" \
+            UNISOC_BSP_INCLUDE="$PWD/uwe5622/unisocwcn/include" \
+            CONFIG_TTY_OVERY_SDIO=m \
+            -j2 modules
+
+      - name: Check module ABI and unresolved symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          modinfo uwe5622/tty-sdio/sprdbt_tty.ko
+          test "$(modinfo -F vermagic uwe5622/tty-sdio/sprdbt_tty.ko | cut -d' ' -f1)" = "${KVER}"
+          mkdir -p artifact
+          cp uwe5622/tty-sdio/sprdbt_tty.ko artifact/
+          modinfo artifact/sprdbt_tty.ko > artifact/modinfo.txt
+          sha256sum artifact/sprdbt_tty.ko > artifact/SHA256SUMS
+          git -C uwe5622 rev-parse HEAD > artifact/UWE5622_SOURCE_COMMIT
+          printf '%s\n' 'EXPERIMENTAL - NOT TESTED ON HARDWARE. DO NOT INSTALL BLINDLY.' > artifact/README.txt
+
+      - name: Upload experimental module
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprdbt-tty-arm64-6.18.60-experimental
+          path: artifact/
+          retention-days: 14
+          if-no-files-found: error
