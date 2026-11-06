@@ -46,3 +46,23 @@ The handover also mentions `bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880`.
 Neither is proof of the source currently installed on the device.
 
 Reference: https://github.com/Medvedolog/opiz3-wlan-backport
+
+## Kernel ABI inventory (read-only)
+
+Before selecting module sources or staging any driver replacement, capture
+the live `modinfo` vermagic, SHA256, `Module.symvers`, compiler and kernel
+configuration without making any system changes:
+
+```sh
+sh platform/uwe5622/wifi/scripts/uwe5622-abi-check status
+sh platform/uwe5622/wifi/scripts/uwe5622-abi-check strict
+```
+
+`strict` exits nonzero if the matching build tree or either driver module is
+missing or a vermagic kernel-release mismatch is detected. Passing it is a
+**necessary but not sufficient** ABI condition: compiler/toolchain differences,
+symbol CRCs and installed module source provenance still require review.
+
+See [PATCH-STATUS.md](PATCH-STATUS.md) for the 30-patch matrix and
+reproducible GitHub Actions audit.
+
