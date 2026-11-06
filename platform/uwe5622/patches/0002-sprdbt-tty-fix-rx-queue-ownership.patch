@@ -1,0 +1,158 @@
+diff --git a/tty-sdio/tty.c b/tty-sdio/tty.c
+--- a/tty-sdio/tty.c
++++ b/tty-sdio/tty.c
+@@ -58,9 +58,8 @@
+ 
+ struct rx_data {
+ 	unsigned int channel;
+-	struct mbuf_t *head;
+-	struct mbuf_t *tail;
+-	unsigned int num;
++	u8 *data;
++	size_t len;
+ 	struct list_head entry;
+ };
+ 
+@@ -229,60 +228,43 @@
+ /* static void mtty_rx_task(unsigned long data) */
+ static void mtty_rx_work_queue(struct work_struct *work)
+ {
+-	int i, ret = 0;
+-	/*struct mtty_device *mtty = (struct mtty_device *)data;*/
+-	struct mtty_device *mtty;
+-	struct rx_data *rx = NULL;
+-
+-	que_task = que_task + 1;
+-	if (que_task > 65530)
+-		que_task = 0;
+-	pr_info("mtty que_task= %d\n", que_task);
+-	que_sche = que_sche - 1;
++	struct mtty_device *mtty = container_of(work, struct mtty_device,
++		bt_rx_work);
++	struct rx_data *rx;
+ 
+-	mtty = container_of(work, struct mtty_device, bt_rx_work);
+-	if (unlikely(!mtty)) {
+-		pr_err("mtty_rx_task mtty is NULL\n");
++	if (atomic_read(&mtty->state) != MTTY_STATE_OPEN)
+ 		return;
+-	}
+ 
+-	if (atomic_read(&mtty->state) == MTTY_STATE_OPEN) {
+-		do {
+-			mutex_lock(&mtty->rw_mutex);
+-			if (list_empty_careful(&mtty->rx_head)) {
+-				pr_err("mtty over load queue done\n");
+-				mutex_unlock(&mtty->rw_mutex);
+-				break;
+-			}
+-			rx = list_first_entry_or_null(&mtty->rx_head,
+-				struct rx_data, entry);
+-			if (!rx) {
+-				pr_err("mtty over load queue abort\n");
+-				mutex_unlock(&mtty->rw_mutex);
+-				break;
+-			}
++	for (;;) {
++		size_t done = 0;
++		int retries = 0;
++
++		mutex_lock(&mtty->rw_mutex);
++		rx = list_first_entry_or_null(&mtty->rx_head,
++			struct rx_data, entry);
++		if (rx)
+ 			list_del(&rx->entry);
+-			mutex_unlock(&mtty->rw_mutex);
++		mutex_unlock(&mtty->rw_mutex);
++		if (!rx)
++			break;
+ 
+-			pr_err("mtty over load working at channel: %d, len: %d\n",
+-					rx->channel, rx->head->len);
+-			for (i = 0; i < rx->head->len; i++) {
+-				ret = tty_insert_flip_char(mtty->port,
+-						*(rx->head->buf+i), TTY_NORMAL);
+-				if (ret != 1) {
+-					i--;
+-					continue;
+-				} else {
+-					tty_flip_buffer_push(mtty->port);
+-				}
+-			}
+-			pr_err("mtty over load cut channel: %d\n", rx->channel);
+-			kfree(rx->head->buf);
+-			kfree(rx);
++		/* Avoid unbounded busy-spinning if the TTY buffer fills. */
++		while (done < rx->len && retries++ < 10) {
++			int n = tty_insert_flip_string(mtty->port,
++				rx->data + done, rx->len - done);
+ 
+-		} while (1);
+-	} else {
+-		pr_info("mtty status isn't open, status:%d\n", atomic_read(&mtty->state));
++			if (n > 0) {
++				done += n;
++				tty_flip_buffer_push(mtty->port);
++			}
++			if (done < rx->len)
++				usleep_range(1000, 2000);
++		}
++		if (done != rx->len)
++			pr_warn_ratelimited("sprdbt_tty: dropped %zu TTY bytes\n",
++				rx->len - done);
++		kfree(rx->data);
++		kfree(rx);
+ 	}
+ }
+ 
+@@ -324,7 +306,7 @@
+ 
+ 	woble_data_recv((unsigned char *)head->buf + BT_SDIO_HEAD_LEN, block_size);
+ 
+-	if (atomic_read(&mtty_dev->state) == MTTY_STATE_CLOSE) {
++	if (!mtty_dev || atomic_read(&mtty_dev->state) == MTTY_STATE_CLOSE) {
+ 		pr_err("%s mtty bt is closed abnormally\n", __func__);
+ 		sprdwcn_bus_push_list(chn, head, tail, num);
+ 		return -1;
+@@ -356,33 +338,25 @@
+ 			return -ENOMEM;
+ 		}
+ 
+-		rx->head = head;
+-		rx->tail = tail;
++		/* Queue data must not share ownership with SDIO mbuf memory. */
+ 		rx->channel = chn;
+-		rx->num = num;
+-		rx->head->len = (block_size) - ret;
+-		rx->head->buf = kmalloc(rx->head->len, GFP_KERNEL);
+-		if (rx->head->buf == NULL) {
++		rx->len = block_size - ret;
++		rx->data = kmalloc(rx->len, GFP_KERNEL);
++		if (!rx->data) {
+ 			pr_err("mtty low memory!\n");
+ 			atomic64_inc(&mtty_rx_queue_alloc_fail);
+ 			kfree(rx);
+ 			sprdwcn_bus_push_list(chn, head, tail, num);
+ 			return -ENOMEM;
+ 		}
+-
+-		memcpy(rx->head->buf, (unsigned char *)head->buf + BT_SDIO_HEAD_LEN + ret, rx->head->len);
++		memcpy(rx->data, (u8 *)head->buf + BT_SDIO_HEAD_LEN + ret,
++			rx->len);
+ 		sprdwcn_bus_push_list(chn, head, tail, num);
+ 		mutex_lock(&mtty_dev->rw_mutex);
+-		pr_err("mtty over load push %d -> %d, channel: %d len: %d\n",
+-			block_size, ret, rx->channel, rx->head->len);
+-		atomic64_inc(&mtty_rx_queue_used);
++		BT_VER("mtty queued %zu bytes\n", rx->len);
+ 		list_add_tail(&rx->entry, &mtty_dev->rx_head);
+ 		mutex_unlock(&mtty_dev->rw_mutex);
+-		if (!work_pending(&mtty_dev->bt_rx_work)) {
+-			pr_err("work_pending\n");
+-			queue_work(mtty_dev->bt_rx_workqueue,
+-				&mtty_dev->bt_rx_work);
+-		}
++		queue_work(mtty_dev->bt_rx_workqueue, &mtty_dev->bt_rx_work);
+ 		return 0;
+ 	}
+ 	pr_err("mtty_rx_cb mtty_dev is NULL!!!\n");
