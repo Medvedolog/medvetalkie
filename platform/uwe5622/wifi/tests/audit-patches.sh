@@ -20,6 +20,8 @@ if (( ${#patches[@]} != 30 )); then
     exit 1
 fi
 mkdir -p "$(dirname "$report")"
+errors_file="$(dirname "$report")/uwe5622-patch-conflicts.txt"
+: > "$errors_file"
 cat > "$report" <<'EOF'
 # UWE5622 patch applicability audit
 
@@ -71,6 +73,10 @@ for patch in "${patches[@]}"; do
     else
         result=conflict
         ((conflicts+=1))
+        {
+            printf "\\n--- %s ---\\n" "$file"
+            git -C "$source_tree" apply --check --recount -- "$patch" 2>&1 || :
+        } >> "$errors_file"
     fi
     # shellcheck disable=SC2016 # Markdown backticks are literal; no shell interpolation intended.
     printf '| `%s` | %s | **%s** | `%s` |\n' "$file" "$selection" "$result" "$targets" >> "$report"
