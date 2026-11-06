@@ -67,4 +67,4 @@ a specific board.** The full-duplex BT subsystem remains out of scope.
 
 ## Confirmed GitHub Actions result
 
-Native ARM64 compilation of both profiles succeeded in [run 42297501633](https://github.com/Medvedolog/medvetalkie/actions/runs/42297501633). The workflow produced `uwe5622_bsp_sdio.ko` and `sprdwl_ng.ko`, checked the first `vermagic` token and AArch64 ELF header, and uploaded quarantined artifacts. This is **build validation only**, not hardware validation or proof that the board uses the same kernel configuration and driver provenance.
+Native ARM64 compilation of both profiles succeeded in [SHA256-pinned run 42297748346](https://github.com/Medvedolog/medvetalkie/actions/runs/42297748346). The workflow produced `uwe5622_bsp_sdio.ko` and `sprdwl_ng.ko`, checked the first `vermagic` token and AArch64 ELF header, and uploaded quarantined artifacts. This is **build validation only**, not hardware validation or proof that the board uses the same kernel configuration and driver provenance.
