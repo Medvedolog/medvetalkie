@@ -65,7 +65,7 @@ fi
 JOBS=${BUILD_JOBS:-2}
 make -C "$KDIR" -j"$JOBS" M="$UWE/unisocwcn" \
   CONFIG_AW_WIFI_DEVICE_UWE5622=y \
-  UNISOC_FW_PATH_CONFIG='\"/lib/firmware/uwe5622/\"' modules
+  UNISOC_FW_PATH_CONFIG=/lib/firmware/uwe5622/ modules
 test -s "$UWE/unisocwcn/Module.symvers"
 make -C "$KDIR" -j"$JOBS" M="$UWE/unisocwifi" \
   CONFIG_WLAN_UWE5622=m \
