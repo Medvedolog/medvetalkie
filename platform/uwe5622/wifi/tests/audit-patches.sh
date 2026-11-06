@@ -94,3 +94,5 @@ done
 } >> "$report"
 echo "Patches: applied=$applied reverse=$reverse conflicts=$conflicts skipped=$skipped"
 cat "$report"
+printf "\\nPatch conflict locations:\\n"
+cat "$errors_file"
