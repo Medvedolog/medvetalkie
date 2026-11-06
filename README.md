@@ -8,6 +8,14 @@ MedveTalkie is a modular motorcycle/bicycle intercom prototype built around an O
 
 The current priority is **proving stable HFP microphone + speaker operation on real hardware**, not shipping an untested product.
 
+## System overview
+
+![MedveTalkie prototype architecture](docs/assets/medvetalkie-architecture.svg)
+
+*Conceptual architecture, not a tested hardware configuration. The Bluetooth controller layout is selectable, and two concurrent HFP/SCO audio links still require bench verification.*
+
+The prototype separates the control plane (C11 daemons, Unix IPC, lightweight browser UI) from the real-time audio plane (BlueZ + PipeWire). A removable ATS Mini V4 provides FM radio, and the 2-inch SPI screen is optional during early development thanks to HDMI simulation.
+
 ## Planned features
 
 - Two configurable headset roles (not tied to a particular manufacturer).

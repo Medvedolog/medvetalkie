@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 730" role="img" aria-labelledby="t d">
+<title id="t">MedveTalkie — system overview</title><desc id="d">Two Bluetooth headsets connect via independent controllers to Orange Pi Zero 3. Separate C11 core, Bluetooth and UI processes coordinate audio through PipeWire and hardware modules.</desc>
+<defs><style>
+text{font-family:Arial,Helvetica,sans-serif;fill:#14233e} .head{font-size:29px;font-weight:700}.sub{font-size:16px;fill:#51617d}.label{font-size:19px;font-weight:700}.small{font-size:15px}.tiny{font-size:13px}.frame{stroke:#b7c9e0;stroke-width:2;fill:#fff}.blue{fill:#e9f2ff;stroke:#6aa1f3;stroke-width:2}.green{fill:#e9f8ec;stroke:#6ec78d;stroke-width:2}.orange{fill:#fff1de;stroke:#ed9c37;stroke-width:2}.violet{fill:#f2edff;stroke:#ad8bea;stroke-width:2}.line{fill:none;stroke:#4c79b6;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.arrow{fill:#4c79b6}
+</style></defs>
+<rect width="1260" height="730" fill="#f7faff"/>
+<rect x="245" y="16" width="770" height="72" rx="20" fill="#1b315e"/><text x="630" y="57" text-anchor="middle" fill="#fff" font-family="Arial" font-size="36" font-weight="bold">MedveTalkie — System Prototype</text>
+<text x="630" y="116" text-anchor="middle" class="sub">Open Bluetooth intercom and audio-routing hub · Orange Pi Zero 3 · C11 · Experimental</text>
+<!-- left headsets -->
+<rect x="24" y="156" width="272" height="408" rx="18" class="blue"/>
+<text x="160" y="195" text-anchor="middle" class="label">Bluetooth headsets</text>
+<rect x="47" y="220" width="223" height="121" rx="13" fill="#fff" stroke="#91b6ec"/>
+<text x="159" y="258" text-anchor="middle" class="label">Headset 1</text><text x="159" y="287" text-anchor="middle" class="small">HFP / HSP · mic + sound</text><text x="159" y="312" text-anchor="middle" class="tiny">A2DP in solo mode</text>
+<rect x="47" y="366" width="223" height="121" rx="13" fill="#fff" stroke="#91b6ec"/>
+<text x="159" y="406" text-anchor="middle" class="label">Headset 2</text><text x="159" y="435" text-anchor="middle" class="small">HFP / HSP · mic + sound</text><text x="159" y="461" text-anchor="middle" class="tiny">Or Android phone</text>
+<text x="160" y="526" text-anchor="middle" class="tiny">Brand-agnostic roles</text>
+<!-- BT controllers -->
+<rect x="325" y="191" width="222" height="326" rx="16" class="green"/>
+<text x="436" y="229" text-anchor="middle" class="label">BT controllers</text>
+<rect x="347" y="263" width="178" height="84" rx="12" fill="#fff" stroke="#73c795"/>
+<text x="436" y="296" text-anchor="middle" class="small" font-weight="bold">Controller A</text><text x="436" y="321" text-anchor="middle" class="tiny">Internal or USB</text>
+<rect x="347" y="384" width="178" height="84" rx="12" fill="#fff" stroke="#73c795"/>
+<text x="436" y="417" text-anchor="middle" class="small" font-weight="bold">Controller B</text><text x="436" y="442" text-anchor="middle" class="tiny">USB · if required</text>
+<!-- center SBC -->
+<rect x="585" y="157" width="354" height="409" rx="18" class="orange"/>
+<text x="762" y="198" text-anchor="middle" class="head">Orange Pi Zero 3</text><text x="762" y="227" text-anchor="middle" class="small">H618 · Armbian CLI · 1 GB RAM</text>
+<rect x="606" y="253" width="312" height="75" rx="10" fill="#fff" stroke="#e7b778"/>
+<text x="762" y="280" text-anchor="middle" class="label">medvetalkied</text><text x="762" y="305" text-anchor="middle" class="tiny">C11 · modes · IPC · web API · SQLite</text>
+<rect x="606" y="347" width="312" height="72" rx="10" fill="#fff" stroke="#e7b778"/>
+<text x="762" y="374" text-anchor="middle" class="label">medvetalkie-bt</text><text x="762" y="398" text-anchor="middle" class="tiny">BlueZ · controller discovery · HFP</text>
+<rect x="606" y="438" width="312" height="72" rx="10" fill="#fff" stroke="#e7b778"/>
+<text x="762" y="465" text-anchor="middle" class="label">PipeWire / WirePlumber</text><text x="762" y="490" text-anchor="middle" class="tiny">Two-way audio routing · music mixing</text>
+<text x="762" y="541" text-anchor="middle" class="tiny">Separate services · status from actual devices</text>
+<!-- right outputs -->
+<rect x="984" y="160" width="252" height="408" rx="18" class="violet"/>
+<text x="1110" y="199" text-anchor="middle" class="label">Controls &amp; media</text>
+<rect x="1002" y="220" width="216" height="70" rx="10" fill="#fff" stroke="#bda6eb"/>
+<text x="1110" y="249" text-anchor="middle" class="small" font-weight="bold">2” IPS ST7789</text><text x="1110" y="271" text-anchor="middle" class="tiny">LVGL · joystick + buttons</text>
+<rect x="1002" y="310" width="216" height="70" rx="10" fill="#fff" stroke="#bda6eb"/>
+<text x="1110" y="339" text-anchor="middle" class="small" font-weight="bold">Web UI / Android</text><text x="1110" y="361" text-anchor="middle" class="tiny">Wi-Fi STA 5 GHz · AP + QR</text>
+<rect x="1002" y="400" width="216" height="70" rx="10" fill="#fff" stroke="#bda6eb"/>
+<text x="1110" y="429" text-anchor="middle" class="small" font-weight="bold">ATS Mini V4 / FM</text><text x="1110" y="451" text-anchor="middle" class="tiny">Stereo Line-In · RDS on radio</text>
+<rect x="1002" y="490" width="216" height="60" rx="10" fill="#fff" stroke="#bda6eb"/>
+<text x="1110" y="519" text-anchor="middle" class="small" font-weight="bold">HDMI / games</text><text x="1110" y="540" text-anchor="middle" class="tiny">Optional</text>
+<!-- connecting horizontal -->
+<path d="M270 280 H347 M270 426 H347 M525 304 H566 V385 H605 M525 426 H566" class="line"/>
+<polygon points="347,280 336,273 336,287" class="arrow"/><polygon points="347,426 336,419 336,433" class="arrow"/><polygon points="605,385 594,378 594,392" class="arrow"/>
+<path d="M939 279 H984 M939 350 H984 M939 432 H984 M939 519 H984" class="line"/>
+<polygon points="984,279 973,272 973,286" class="arrow"/><polygon points="984,350 973,343 973,357" class="arrow"/><polygon points="984,432 973,425 973,439" class="arrow"/><polygon points="984,519 973,512 973,526" class="arrow"/>
+<!-- footer -->
+<rect x="24" y="598" width="1212" height="104" rx="17" fill="#eaf0f8" stroke="#c0cfe0"/>
+<text x="48" y="629" class="label">Design principles</text>
+<text x="48" y="657" class="small">• Full duplex requires two working HFP/SCO audio paths; not yet hardware-verified.</text>
+<text x="48" y="682" class="small">• Stable controller identity instead of hci0/hci1; isolated C processes; audio never traverses HTTP.</text>
+<text x="1217" y="691" text-anchor="end" class="tiny">Architecture concept · not a tested product</text>
+</svg>
