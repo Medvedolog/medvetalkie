@@ -1,6 +1,6 @@
 # UWE5622 / AW859A HFP investigation: patch series
 
-**Status:** code-review candidates only. **Not compiled against the test SBC kernel and not deployed or audio-validated.** The test environment still has working A2DP; preserve it.
+**Status (2026-11-06):** GitHub Actions successfully compiled the patched module using matching Armbian 6.18.60 headers on Debian trixie ARM64 (GCC 14). **Not deployed or audio-validated on the board.** Preserve the stock module and previously working A2DP. [Successful CI build](https://github.com/Medvedolog/medvetalkie/actions/runs/42223637527). [Staged hardware trial and rollback](HARDWARE-TRIAL.md).
 
 ## Reference source
 
