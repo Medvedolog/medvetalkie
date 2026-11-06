@@ -66,3 +66,9 @@ symbol CRCs and installed module source provenance still require review.
 See [PATCH-STATUS.md](PATCH-STATUS.md) for the 30-patch matrix and
 reproducible GitHub Actions audit.
 
+
+## Experimental module builds
+
+See [BUILD.md](BUILD.md) for the P0 and AP+STA profile definitions,
+reproducible native ARM64 build results, module SHA256 manifests and ABI
+validation gates. **Do not install these CI artifacts on the board yet.**
