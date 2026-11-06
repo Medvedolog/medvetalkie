@@ -23,4 +23,13 @@ Full reproduction and environment: [hardware bench report](../../docs/HARDWARE-B
 5. Validate a reversible kernel-module patch against the exact kernel ABI; retain successful A2DP and Ethernet connectivity.
 6. If no SCO is delivered at SDIO ingress, investigate WCN firmware and voice routing instead of blaming the TTY driver without proof.
 
-Directory conventions (populate when real files exist): `patches/` for version-pinned changes; `tests/` for bounded checks; `logs/` for sanitized summaries. **Do not commit raw btsnoop traces or firmware images without reviewing identifiers and redistribution rights.**
+## Prepared artifacts
+
+- [Patch series and deployment gates](PATCH-SERIES.md).
+- [`0001` RX SDIO/HCI read-only counters](patches/0001-sprdbt-tty-add-hci-rx-sdio-counters.patch).
+- [`0002` RX queue ownership and bounded retries](patches/0002-sprdbt-tty-fix-rx-queue-ownership.patch).
+- [Non-invasive sequential patch verification](tests/verify-patches.sh).
+
+**Important:** neither patch is a tested kernel module; do not replace the working module on the Orange Pi until the exact build revision, ABI and A2DP regression checks are complete.
+
+Reserve `logs/` for sanitized summaries. **Do not commit raw btsnoop traces or firmware images without reviewing identifiers and redistribution rights.**
