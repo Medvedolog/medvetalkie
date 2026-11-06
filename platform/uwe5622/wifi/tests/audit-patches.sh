@@ -89,6 +89,8 @@ done
     printf 'Applied in audit worktree: **%d**, already matched: **%d**, conflicts: **%d**, OpenWrt-only skipped: **%d**.\n' "$applied" "$reverse" "$conflicts" "$skipped"
     echo
     echo "**Never install the resulting source tree or modules based on this audit alone.**"
+    echo
+    echo "Individual conflict locations are in the downloadable conflict log."
 } >> "$report"
 echo "Patches: applied=$applied reverse=$reverse conflicts=$conflicts skipped=$skipped"
 cat "$report"
