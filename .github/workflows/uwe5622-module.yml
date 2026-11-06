@@ -30,7 +30,7 @@ jobs:
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             make gcc libc6-dev bison flex libssl-dev libelf-dev bc git curl patch \
-            binutils kmod file
+            binutils kmod file dwarves
 
       - name: Fetch exact Armbian headers (do not upgrade kernel)
         shell: bash
