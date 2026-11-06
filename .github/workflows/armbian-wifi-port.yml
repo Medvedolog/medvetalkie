@@ -1,0 +1,24 @@
+name: Armbian UWE5622 Wi-Fi portability
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experimental/armbian-wifi-backport
+    paths:
+      - '.github/workflows/armbian-wifi-port.yml'
+      - 'platform/wifi/**'
+permissions:
+  contents: read
+jobs:
+  patch-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Armbian driver
+        run: |
+          git clone --filter=blob:none https://github.com/armbian/uwe5622.git upstream
+          git -C upstream checkout --detach bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880
+          test "$(git -C upstream rev-parse HEAD)" = bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880
+      - name: Verify source-level portability
+        run: sh platform/wifi/tests/verify-source-patches.sh upstream
