@@ -1,6 +1,8 @@
 # Hardware validation checklist
 
-**Hardware results are pending.** Do not mark any item as passed based only on software initialization.
+**Current evidence (2026-11-06):** one headset paired and connected on the built-in AW859A; **A2DP SBC playback passed with an audible 440 Hz tone**. HFP mSBC and CVSD both failed the actual two-way audio test. An HCI eSCO session established successfully, but its test trace recorded **595 SCO TX / 0 SCO RX**, and the captured microphone WAV contained only zeros. **The full-duplex feasibility gate remains blocked.**
+
+Detailed reproducible report: [Orange Pi Zero 3 bench — 2026-11-06](HARDWARE-BENCH-2026-11-06.md). UWE5622 kernel transport investigation is isolated in [platform/uwe5622](../platform/uwe5622/README.md). These observations apply to the tested Armbian 6.18.60 / AIRIDE N1 combination; they are not proof of a universal controller limitation.
 
 ## 0. Record test environment
 
