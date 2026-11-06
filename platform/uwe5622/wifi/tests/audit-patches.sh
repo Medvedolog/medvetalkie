@@ -72,6 +72,7 @@ for patch in "${patches[@]}"; do
         result=conflict
         ((conflicts+=1))
     fi
+    # shellcheck disable=SC2016 # Markdown backticks are literal; no shell interpolation intended.
     printf '| `%s` | %s | **%s** | `%s` |\n' "$file" "$selection" "$result" "$targets" >> "$report"
     result=
 done
