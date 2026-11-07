@@ -25,7 +25,7 @@ make -C "$KDIR" -j2 M="$ROOT/tty-sdio" CONFIG_TTY_OVERY_SDIO=m \
   UNISOC_BSP_INCLUDE="$ROOT/unisocwcn/include" \
   KBUILD_EXTRA_SYMBOLS="$ROOT/unisocwcn/Module.symvers" modules
 mods=( "$ROOT/unisocwcn/uwe5622_bsp_sdio.ko" "$ROOT/unisocwifi/sprdwl_ng.ko" "$ROOT/tty-sdio/sprdbt_tty.ko" )
-for f in "\${mods[@]}"; do
+for f in "${mods[@]}"; do
   [[ -s "$f" ]] || { echo "Missing built module: $f" >&2; exit 1; }
   [[ "$(modinfo -F vermagic "$f")" == "$KVER "* ]] || {
     echo "ABI release mismatch in $f" >&2; exit 1;
@@ -35,7 +35,7 @@ for f in "\${mods[@]}"; do
   }
 done
 install -d -m 755 "$DEST" /usr/share/medvetalkie/uwe5622
-for f in "\${mods[@]}"; do
+for f in "${mods[@]}"; do
   install -m 644 "$f" "$DEST/"
 done
 cp "$ROOT/unisocwcn/Module.symvers" /usr/share/medvetalkie/uwe5622/BSP-Module.symvers
