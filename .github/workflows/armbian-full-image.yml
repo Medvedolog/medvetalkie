@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           for script in platform/armbian-image/*.sh; do bash -n "$script"; done
-          ! grep -RnF '${' platform/armbian-image
+          ! grep -RnF '\\${' platform/armbian-image
           grep -F 'ConditionPathExists=/etc/medvetalkie/enable-onboard-bluetooth' platform/armbian-image/medvetalkie-uwe5622.sh
           grep -F 'INSTALL_HEADERS=yes' platform/armbian-image/medvetalkie-uwe5622.sh
           grep -F 'Module.symvers' platform/armbian-image/install-image-modules.sh
@@ -95,6 +95,33 @@ jobs:
           test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-uwe5622-scripts/uwe5622-recover"
           echo "Staged Armbian source and patched UWE5622 modules: OK (no image build)"
 
+
+  hosted-capacity:
+    name: Hosted x64 Armbian capacity and Docker probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read-only host resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== CPU/OS =="
+          uname -m
+          nproc
+          echo "== RAM =="
+          free -h
+          echo "== mount points =="
+          df -h / /mnt /home/runner || true
+          echo "== writable test =="
+          test -w "$RUNNER_TEMP"
+          echo "== Docker runtime =="
+          docker --version
+          docker info --format 'Driver={{.Driver}} Root={{.DockerRootDir}}'
+          echo "== large preinstalled workloads (du only) =="
+          for path in /usr/share/dotnet /usr/local/lib/android /opt/hostedtoolcache /usr/local/share/powershell /usr/share/swift; do
+            if [[ -d "$path" ]]; then du -sh "$path" || true; fi
+          done
+          echo "Probe complete. No data deleted."
 
   image:
     name: Full Armbian Debian 13 image (manual, requires 50+ GiB free)
