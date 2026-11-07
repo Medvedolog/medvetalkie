@@ -81,8 +81,10 @@ Bluetooth variant. To switch profiles, use a **new empty build directory**.
 
 The user-managed home PC has an x86-64 Ryzen CPU. Do **not** request ARM64
 labels for that computer: compile the ARM64 Armbian image through Armbian's
-supported x86-64 build container. Standard GitHub-hosted Ubuntu VMs have only
-14 GiB of SSD storage, below Armbian's approximately 50 GiB recommendation.
+supported x86-64 build container. GitHub guarantees 14 GiB of storage for standard Ubuntu VMs, but an actual
+GitHub-hosted `ubuntu-24.04` probe on 2026-11-07 found **86 GiB free**, 15 GiB
+RAM and working Docker. The build pipeline therefore supports both hosted
+and home Linux/X64 runners and refuses to build if the real disk check fails.
 
 ### Self-hosted runner installation / discovery
 
@@ -133,9 +135,10 @@ available to this repository. Being queued does not establish whether the
 runner is offline, busy, mislabelled or registered elsewhere.
 
 The two **full** images are requested only by a trusted branch push with
-`[armbian-home-build]` in the commit message, or manual
-`workflow_dispatch` once the workflow exists on the default branch.
-The build jobs use the same runner label set and `max-parallel: 1`:
+`[armbian-hosted-build]` (GitHub-hosted x64) or `[armbian-home-build]`
+(home WSL2 runner) in the commit message, or manual `workflow_dispatch`
+once the workflow exists on the default branch. The matrix uses
+`max-parallel: 1`:
 
 - AP+STA Wi-Fi + unmodified upstream SDIO Bluetooth transport
 - AP+STA Wi-Fi + two experimental `sprdbt_tty` fixes
