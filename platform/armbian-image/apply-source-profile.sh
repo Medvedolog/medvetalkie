@@ -32,10 +32,10 @@ echo '070 present in base source'
 apply_one() {
   local id=$1 file
   case "$id" in
-    030) file="$HERE/../wifi/patches/030-cfg80211-netdev-locking-armbian.patch" ;;
-    160) file="$HERE/../wifi/patches/160-prepare-addba-armbian.patch" ;;
-    190) file="$HERE/../wifi/patches/190-addba-tid-array-armbian.patch" ;;
-    290) file="$HERE/../wifi/patches/290-per-interface-mac-armbian.patch" ;;
+    030) file="$HERE/../uwe5622/wifi/patches/030-cfg80211-netdev-locking-armbian.patch" ;;
+    160) file="$HERE/../uwe5622/wifi/patches/160-prepare-addba-armbian.patch" ;;
+    190) file="$HERE/../uwe5622/wifi/patches/190-addba-tid-array-armbian.patch" ;;
+    290) file="$HERE/../uwe5622/wifi/patches/290-per-interface-mac-armbian.patch" ;;
     *) file=$(find "$OPENWRT_PATCHES" -maxdepth 1 -type f -name "$id-*.patch" -print -quit) ;;
   esac
   [[ -n "$file" && -f "$file" ]] || { echo "Missing patch: $id" >&2; exit 1; }
@@ -50,7 +50,7 @@ fi
 # Bluetooth transport activation remains opt-in even when its source is patched.
 if [[ "${MEDVETALKIE_BT_PATCHES:-no}" == yes ]]; then
   for id in 0001 0002; do
-    file=$(find "$HERE/../patches" -maxdepth 1 -type f -name "$id-sprdbt-tty-*.patch" -print -quit)
+    file=$(find "$HERE/../uwe5622/patches" -maxdepth 1 -type f -name "$id-sprdbt-tty-*.patch" -print -quit)
     [[ -n "$file" ]] || { echo "Missing optional BT patch $id" >&2; exit 1; }
     patch -d "$UWE" --forward --batch -p1 < "$file"
     echo "Applied optional BT $id $(basename "$file")"
