@@ -77,14 +77,76 @@ Output: `$HOME/armbian-build-medvetalkie/output/images/` on a successful
 full image compile. `BT_PROFILE=patched` produces the experimental
 Bluetooth variant. To switch profiles, use a **new empty build directory**.
 
-GitHub Actions also has a **manual** build workflow at
-[`.github/workflows/armbian-full-image.yml`](../../.github/workflows/armbian-full-image.yml).
-The image job refuses to run with less than 50 GiB free. A self-hosted ARM64
-runner may be required; the default hosted runner may not have the needed
-storage. Automatic push events validate the patch combinations but **do not
-build a bootable image**. GitHub only exposes manual `workflow_dispatch`
-from the UI once the workflow exists on the default branch; while this PR
-is draft, the supported full-image path is the local `--build` command.
+## GitHub Actions and home Windows / WSL2 runner
+
+The user-managed home PC has an x86-64 Ryzen CPU. Do **not** request ARM64
+labels for that computer: compile the ARM64 Armbian image through Armbian's
+supported x86-64 build container. Standard GitHub-hosted Ubuntu VMs have only
+14 GiB of SSD storage, below Armbian's approximately 50 GiB recommendation.
+
+### Self-hosted runner installation / discovery
+
+Runner registration is **scoped to a GitHub repository** for a personal
+account. A runner registered to `Medvedolog/medvewrt` does **not**
+automatically run jobs for `Medvedolog/medvetalkie`.
+
+Open [MedveTalkie's runner settings](https://github.com/Medvedolog/medvetalkie/settings/actions/runners)
+and check registered runners. The full image workflow needs this exact
+set of labels:
+
+```
+self-hosted, Linux, X64, armbian-image
+```
+
+Use WSL2 (Debian 13 preferred), or native Linux, **not** a native Windows
+runner. Create a *separate* GitHub runner installation for the MedveTalkie
+repository if the home machine currently runs only `medvewrt` jobs.
+GitHub's Settings > Actions > Runners > New self-hosted runner
+page provides the current installer version and a short-lived local
+registration token. **Do not post that token in chat or commit it.**
+During registration add the custom `armbian-image` label.
+
+Windows-side inventory script (read-only):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File platform/armbian-image/inspect-runners-windows.ps1
+```
+
+Linux / WSL2 resources probe, run with a Linux `ext4` workspace:
+
+```bash
+bash platform/armbian-image/home-runner-preflight.sh "$HOME"
+```
+
+This checks 8 GiB assigned Linux RAM, 50 GiB free *inside the exact build
+filesystem*, Docker, `sudo -n` and build prerequisites. WSL2 users must
+also ensure sufficient free space on the physical Windows drive hosting its
+VHDX. It does not modify runner services or the system.
+
+### Launching from the draft PR branch
+
+[Workflow](../../.github/workflows/armbian-full-image.yml) provides a
+read-only *home-runner-probe* triggered by a trusted branch push whose
+commit message contains `[armbian-home-probe]`. If its job remains queued,
+the expected Linux/X64 runner with `armbian-image` is not presently
+available to this repository. Being queued does not establish whether the
+runner is offline, busy, mislabelled or registered elsewhere.
+
+The two **full** images are requested only by a trusted branch push with
+`[armbian-home-build]` in the commit message, or manual
+`workflow_dispatch` once the workflow exists on the default branch.
+The build jobs use the same runner label set and `max-parallel: 1`:
+
+- AP+STA Wi-Fi + unmodified upstream SDIO Bluetooth transport
+- AP+STA Wi-Fi + two experimental `sprdbt_tty` fixes
+
+The original bootable Armbian microSD remains the safety fallback.
+No full-image build is triggered by ordinary pushes. Never enable
+untrusted pull requests to execute commands on a personal self-hosted
+runner, particularly one with Docker/sudo access. For a public repository,
+treat this builder as disposable and isolate it from personal files and
+secrets. Self-hosted runners cannot be guaranteed to be as isolated as
+GitHub-hosted VMs.
 
 
 ## Boot and safety
