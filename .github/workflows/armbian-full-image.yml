@@ -72,10 +72,34 @@ jobs:
           test -f uwe5622/tty-sdio/Makefile
           test -f uwe5622/unisocwifi/Makefile
 
+
+  staging-smoke:
+    name: Stage pinned Armbian build tree without compiling image
+    needs: profile-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble actual Armbian build workspace
+        shell: bash
+        env:
+          WIFI_PROFILE: apsta
+          BT_PROFILE: patched
+        run: |
+          set -euo pipefail
+          bash platform/armbian-image/prepare-full-image.sh "$RUNNER_TEMP/armbian-medvetalkie"
+          test "$(git -C "$RUNNER_TEMP/armbian-medvetalkie" rev-parse HEAD)" = "664d5fdf0efa5284dd85daae15101c5423d6de73"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/extensions/medvetalkie-uwe5622.sh"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-uwe5622-src/install-image-modules.sh"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-uwe5622-src/BUILD-PROVENANCE.txt"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-uwe5622-scripts/uwe5622-recover"
+          echo "Staged Armbian source and patched UWE5622 modules: OK (no image build)"
+
+
   image:
     name: Full Armbian Debian 13 image (manual, requires 50+ GiB free)
     if: github.event_name == 'workflow_dispatch'
-    needs: profile-check
+    needs: [profile-check, staging-smoke]
     runs-on: ${{ inputs.runner == 'selfhosted' && fromJSON('["self-hosted","Linux","ARM64","armbian-image"]') || 'ubuntu-24.04-arm' }}
     timeout-minutes: 300
     steps:
