@@ -104,10 +104,10 @@ jobs:
           bash platform/armbian-image/home-runner-preflight.sh "$RUNNER_TEMP"
 
   image:
-    name: Full Armbian OS image / BT ${{ matrix.bt }}
+    name: Native ARM64 full Armbian OS / BT ${{ matrix.bt }}
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[armbian-home-build]') || contains(github.event.head_commit.message, '[armbian-hosted-build]')))
     needs: [profile-check, staging-smoke]
-    runs-on: ${{ ((github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-hosted-build]')) || inputs.execution == 'hosted') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","armbian-image"]') }}
+    runs-on: ${{ ((github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-hosted-build]')) || inputs.execution == 'hosted') && 'ubuntu-24.04-arm' || fromJSON('["self-hosted","Linux","X64","armbian-image"]') }}
     timeout-minutes: 300
     strategy:
       fail-fast: false
