@@ -90,33 +90,6 @@ jobs:
           echo "Staged Armbian source and patched UWE5622 modules: OK (no image build)"
 
 
-  hosted-capacity:
-    name: Hosted x64 Armbian capacity and Docker probe
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Read-only host resources
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "== CPU/OS =="
-          uname -m
-          nproc
-          echo "== RAM =="
-          free -h
-          echo "== mount points =="
-          df -h / /mnt /home/runner || true
-          echo "== writable test =="
-          test -w "$RUNNER_TEMP"
-          echo "== Docker runtime =="
-          docker --version
-          docker info --format 'Driver={{.Driver}} Root={{.DockerRootDir}}'
-          echo "== large preinstalled workloads (du only) =="
-          for path in /usr/share/dotnet /usr/local/lib/android /opt/hostedtoolcache /usr/local/share/powershell /usr/share/swift; do
-            if [[ -d "$path" ]]; then du -sh "$path" || true; fi
-          done
-          echo "Probe complete. No data deleted."
-
   home-runner-probe:
     name: Home WSL2 self-hosted runner readiness (read-only)
     if: github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-home-probe]')
@@ -131,7 +104,7 @@ jobs:
           bash platform/armbian-image/home-runner-preflight.sh "$RUNNER_TEMP"
 
   image:
-    name: Full Armbian Debian 13 image (manual, requires 50+ GiB free)
+    name: Home WSL2 Armbian image / BT ${{ matrix.bt }}
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-home-build]'))
     needs: [profile-check, staging-smoke]
     runs-on: [self-hosted, Linux, X64, armbian-image]
