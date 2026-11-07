@@ -9,7 +9,7 @@ fi
 UWE=$(realpath "$1")
 BACKPORT=$(realpath "$2")
 PROFILE=$3
-HERE=$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 OPENWRT_PATCHES="$BACKPORT/package/kernel/uwe5622/patches"
 for path in "$UWE/.git" "$BACKPORT/.git" "$OPENWRT_PATCHES"; do
   [[ -e "$path" ]] || { echo "Missing checkout/patch directory: $path" >&2; exit 1; }
@@ -48,7 +48,7 @@ if [[ "$PROFILE" == apsta ]]; then
   for id in 180 200 290 310; do apply_one "$id"; done
 fi
 # Bluetooth transport activation remains opt-in even when its source is patched.
-if [[ "\${MEDVETALKIE_BT_PATCHES:-no}" == yes ]]; then
+if [[ "${MEDVETALKIE_BT_PATCHES:-no}" == yes ]]; then
   for id in 0001 0002; do
     file=$(find "$HERE/../patches" -maxdepth 1 -type f -name "$id-sprdbt-tty-*.patch" -print -quit)
     [[ -n "$file" ]] || { echo "Missing optional BT patch $id" >&2; exit 1; }
@@ -56,4 +56,4 @@ if [[ "\${MEDVETALKIE_BT_PATCHES:-no}" == yes ]]; then
     echo "Applied optional BT $id $(basename "$file")"
   done
 fi
-echo "Prepared patched UWE5622 source: Wi-Fi=$PROFILE, BT patches=\${MEDVETALKIE_BT_PATCHES:-no}"
+echo "Prepared patched UWE5622 source: Wi-Fi=$PROFILE, BT patches=${MEDVETALKIE_BT_PATCHES:-no}"
