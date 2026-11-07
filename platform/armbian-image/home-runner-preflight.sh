@@ -6,9 +6,13 @@ TARGET=${1:-"$HOME"}
 TARGET=$(realpath "$TARGET")
 echo "Runner: ${RUNNER_NAME:-manual} / ${RUNNER_OS:-$(uname -s)} / $(uname -m)"
 echo "Workspace: $TARGET"
-[[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
-  echo "NOT READY: use Linux/x86_64 (native or WSL2), not Windows runner" >&2; exit 1;
+[[ "$(uname -s)" == Linux ]] || {
+  echo "NOT READY: use Linux (native or WSL2), not native Windows" >&2; exit 1;
 }
+case "$(uname -m)" in
+  x86_64|aarch64) ;;
+  *) echo "NOT READY: unsupported host architecture: $(uname -m)" >&2; exit 1 ;;
+esac
 case "$TARGET" in /mnt/[a-z]|/mnt/[a-z]/*)
   echo "NOT READY: use Linux filesystem, not /mnt/c or another Windows drive" >&2; exit 1;;
 esac
