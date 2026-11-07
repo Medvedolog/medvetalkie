@@ -38,6 +38,15 @@ echo "Checking Docker daemon (timeout 20s)"
 timeout 20s docker info --format 'Docker version={{.ServerVersion}} Root={{.DockerRootDir}}' || {
   echo "NOT READY: Docker daemon unavailable in Linux/WSL2" >&2; exit 1;
 }
+if [[ "$(uname -m)" == x86_64 ]]; then
+  if [[ ! -e /proc/sys/fs/binfmt_misc/qemu-aarch64 ]]; then
+    echo "NOT READY: ARM64 QEMU binfmt is missing on this x64 kernel" >&2
+    echo "On an isolated WSL2 runner, register ARM64 binfmt with a trusted privileged binfmt installer." >&2
+    echo "Then verify /proc/sys/fs/binfmt_misc/qemu-aarch64 before starting the image." >&2
+    exit 1
+  fi
+  echo "ARM64 binfmt registration detected on this x64 host."
+fi
 sudo -n true >/dev/null 2>&1 || {
   echo "NOT READY: passwordless sudo is required for the unattended runner" >&2; exit 1;
 }
