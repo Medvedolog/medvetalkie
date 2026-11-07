@@ -39,6 +39,10 @@ BlueZ, PipeWire and WirePlumber remain system services. Audio samples are **neve
 
 See [Architecture](docs/ARCHITECTURE.md), [hardware validation](docs/VALIDATION.md), [roadmap](docs/ROADMAP.md) and [API design](docs/IPC.md).
 
+## Custom Armbian image (Orange Pi Zero 3)
+
+The [full-image build profile](platform/armbian-image/README.md) stages reviewed AW859A Wi-Fi fixes and optional SDIO Bluetooth transport patches. It compiles BSP, Wi-Fi and BT modules against the **same kernel ABI** as the newly built Armbian image; USB Bluetooth remains supported by the stock kernel. [GitHub Actions](.github/workflows/armbian-full-image.yml) validates source profiles on push and offers a **manual** full-image build on a host with at least 50 GiB free. **No bootable custom Armbian image or board-level validation is claimed yet.**
+
 ## Current state
 
 This initial repository contains the architecture and a basic buildable C11 process skeleton. **HFP routing, CivetWeb, LVGL, hardware access and installation automation are not yet implemented.** The skeleton is not intended for real riding.
