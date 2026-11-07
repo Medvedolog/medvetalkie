@@ -2,15 +2,15 @@
 # Stage a full Armbian image build for Orange Pi Zero 3 (H618).
 # Default: prepare sources only. --build starts the resource-intensive image.
 set -euo pipefail
-HERE=$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT=$(realpath "$HERE/../..")
-DEST=$(realpath -m "\${1:-$PWD/armbian-build-medvetalkie}")
-WIFI_PROFILE=\${WIFI_PROFILE:-apsta}
-BT_PROFILE=\${BT_PROFILE:-stock}
+DEST=$(realpath -m "${1:-$PWD/armbian-build-medvetalkie}")
+WIFI_PROFILE=${WIFI_PROFILE:-apsta}
+BT_PROFILE=${BT_PROFILE:-stock}
 ARM_REF=664d5fdf0efa5284dd85daae15101c5423d6de73
 UWE_REF=bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880
 OPENWRT_REF=29b6faf6b08a2b62097e509eb0fa62720ab48996
-BUILD_FLAG=\${2:-}
+BUILD_FLAG=${2:-}
 case "$WIFI_PROFILE" in p0|apsta) ;; *) echo "WIFI_PROFILE must be p0 or apsta" >&2; exit 2 ;; esac
 case "$BT_PROFILE" in stock|patched) ;; *) echo "BT_PROFILE must be stock or patched" >&2; exit 2 ;; esac
 case "$BUILD_FLAG" in ""|--build) ;; *) echo "Optional second argument: --build" >&2; exit 2 ;; esac
