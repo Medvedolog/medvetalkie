@@ -18,7 +18,7 @@ for cmd in git tar bash patch realpath; do command -v "$cmd" >/dev/null || exit 
 
 if [[ ! -d "$DEST/.git" ]]; then
   [[ ! -e "$DEST" ]] || { echo "Destination exists but is not Armbian git checkout: $DEST" >&2; exit 1; }
-  git clone https://github.com/armbian/build.git "$DEST"
+  git clone --filter=blob:none --no-checkout https://github.com/armbian/build.git "$DEST"
 fi
 git -C "$DEST" checkout --detach "$ARM_REF"
 [[ "$(git -C "$DEST" rev-parse HEAD)" == "$ARM_REF" ]] || exit 1
