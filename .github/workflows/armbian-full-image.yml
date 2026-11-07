@@ -21,12 +21,6 @@ on:
         options: [stock, patched]
         default: stock
         required: true
-      runner:
-        description: For images use a runner with at least 50 GiB free disk
-        type: choice
-        options: [hosted, selfhosted]
-        default: hosted
-        required: true
 
 permissions:
   contents: read
@@ -123,42 +117,54 @@ jobs:
           done
           echo "Probe complete. No data deleted."
 
-  image:
-    name: Full Armbian Debian 13 image (manual, requires 50+ GiB free)
-    if: github.event_name == 'workflow_dispatch'
-    needs: [profile-check, staging-smoke]
-    runs-on: ${{ inputs.runner == 'selfhosted' && fromJSON('["self-hosted","Linux","ARM64","armbian-image"]') || 'ubuntu-24.04-arm' }}
-    timeout-minutes: 300
+  home-runner-probe:
+    name: Home WSL2 self-hosted runner readiness (read-only)
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-home-probe]')
+    runs-on: [self-hosted, Linux, X64, armbian-image]
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Verify host requirements before making image
+      - name: Read-only runner resources and Docker
         shell: bash
         run: |
           set -euo pipefail
-          df -h .
-          available=$(df -Pk . | awk 'NR==2{print $4}')
-          if (( available < 50*1024*1024 )); then
-            echo "::error::Full image needs at least 50 GiB free. Choose selfhosted ARM64 runner with armbian-image label."
-            exit 1
-          fi
-          command -v docker || { echo "Docker required for Armbian build host"; exit 1; }
+          bash platform/armbian-image/home-runner-preflight.sh "$RUNNER_TEMP"
+
+  image:
+    name: Full Armbian Debian 13 image (manual, requires 50+ GiB free)
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-home-build]'))
+    needs: [profile-check, staging-smoke]
+    runs-on: [self-hosted, Linux, X64, armbian-image]
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        bt: [stock, patched]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read-only home runner resources and Docker preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash platform/armbian-image/home-runner-preflight.sh "$RUNNER_TEMP"
       - name: Stage and compile pinned Armbian image
         shell: bash
         env:
-          WIFI_PROFILE: ${{ inputs.wifi_profile }}
-          BT_PROFILE: ${{ inputs.bt_profile }}
+          WIFI_PROFILE: ${{ inputs.wifi_profile || 'apsta' }}
+          BT_PROFILE: ${{ matrix.bt }}
         run: |
           set -euo pipefail
-          bash platform/armbian-image/prepare-full-image.sh "$PWD/armbian-build-medvetalkie" --build
-          find "$PWD/armbian-build-medvetalkie/output/images" -maxdepth 2 -type f -printf '%p %s bytes\n'
+          bash platform/armbian-image/prepare-full-image.sh "$RUNNER_TEMP/armbian-build-medvetalkie-${{ matrix.bt }}" --build
+          find "$RUNNER_TEMP/armbian-build-medvetalkie-${{ matrix.bt }}/output/images" -maxdepth 2 -type f -printf '%p %s bytes\n'
       - name: Upload generated images and checksums
         uses: actions/upload-artifact@v4
         with:
-          name: medvetalkie-armbian-orangepizero3-${{ inputs.wifi_profile }}-bt-${{ inputs.bt_profile }}-UNTESTED
+          name: medvetalkie-armbian-orangepizero3-${{ inputs.wifi_profile || 'apsta' }}-bt-${{ matrix.bt }}-UNTESTED
           path: |
-            armbian-build-medvetalkie/output/images/*.img*
-            armbian-build-medvetalkie/output/images/*.sha
-            armbian-build-medvetalkie/output/images/*.sha256
-            armbian-build-medvetalkie/output/images/*.txt
+            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.img*
+            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.sha
+            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.sha256
+            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.txt
           if-no-files-found: error
           retention-days: 7
