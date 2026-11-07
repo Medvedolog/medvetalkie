@@ -15,11 +15,11 @@ on:
         options: [p0, apsta]
         default: apsta
         required: true
-      bt_profile:
-        description: Onboard Bluetooth transport source patches (never autostart)
+      execution:
+        description: Build machine (home needs WSL2 Linux/X64 armbian-image runner)
         type: choice
-        options: [stock, patched]
-        default: stock
+        options: [hosted, home]
+        default: hosted
         required: true
 
 permissions:
@@ -104,10 +104,10 @@ jobs:
           bash platform/armbian-image/home-runner-preflight.sh "$RUNNER_TEMP"
 
   image:
-    name: Home WSL2 Armbian image / BT ${{ matrix.bt }}
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-home-build]'))
+    name: Full Armbian OS image / BT ${{ matrix.bt }}
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[armbian-home-build]') || contains(github.event.head_commit.message, '[armbian-hosted-build]')))
     needs: [profile-check, staging-smoke]
-    runs-on: [self-hosted, Linux, X64, armbian-image]
+    runs-on: ${{ ((github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-hosted-build]')) || inputs.execution == 'hosted') && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","X64","armbian-image"]') }}
     timeout-minutes: 300
     strategy:
       fail-fast: false
@@ -116,7 +116,7 @@ jobs:
         bt: [stock, patched]
     steps:
       - uses: actions/checkout@v4
-      - name: Read-only home runner resources and Docker preflight
+      - name: Verify selected builder resources and Docker
         shell: bash
         run: |
           set -euo pipefail
