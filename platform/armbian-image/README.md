@@ -82,7 +82,10 @@ GitHub Actions also has a **manual** build workflow at
 The image job refuses to run with less than 50 GiB free. A self-hosted ARM64
 runner may be required; the default hosted runner may not have the needed
 storage. Automatic push events validate the patch combinations but **do not
-build a bootable image**.
+build a bootable image**. GitHub only exposes manual `workflow_dispatch`
+from the UI once the workflow exists on the default branch; while this PR
+is draft, the supported full-image path is the local `--build` command.
+
 
 ## Boot and safety
 
@@ -127,3 +130,13 @@ modinfo -n sprdbt_tty
 
 **Do not deploy or write a full image to the active storage device without
 a separate, bootable fallback and UART access.**
+
+## Verified three-module CI (not a bootable image)
+
+[Combined ARM64 kernel module run 42370939364](https://github.com/Medvedolog/medvetalkie/actions/runs/42370939364)
+completed successfully for all four Wi-Fi × Bluetooth source combinations.
+Each compiled all three modules (`uwe5622_bsp_sdio`, `sprdwl_ng`,
+`sprdbt_tty`) against one pinned Armbian 6.18.60 kernel ABI and verified
+AArch64 ELF and matching `vermagic`. Actual full-image kernel compilation,
+bootloader and DTB integration, first boot, Bluetooth SCO audio and SDIO
+recovery remain untested.
