@@ -140,3 +140,12 @@ Each compiled all three modules (`uwe5622_bsp_sdio`, `sprdwl_ng`,
 AArch64 ELF and matching `vermagic`. Actual full-image kernel compilation,
 bootloader and DTB integration, first boot, Bluetooth SCO audio and SDIO
 recovery remain untested.
+
+## Full build-workspace staging smoke test
+
+[GitHub Actions run 42371121890](https://github.com/Medvedolog/medvetalkie/actions/runs/42371121890)
+passed the four patch combinations and staged the **actual pinned Armbian
+build tree**, prepared the combined patched UWE5622 source and copied the
+extension, recovery scripts and build manifest. It **did not compile an
+Armbian `.img`**, and this smoke test must not be described as a firmware
+release.
