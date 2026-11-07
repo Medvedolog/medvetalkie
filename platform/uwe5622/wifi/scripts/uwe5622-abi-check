@@ -1,0 +1,64 @@
+#!/bin/sh
+# Read-only ABI inventory for the running Armbian kernel.
+set -u
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+KERNEL=$(uname -r)
+BUILD=/lib/modules/$KERNEL/build
+errors=0
+say() { printf '%-27s %s\n' "$1" "$2"; }
+require_file() {
+    if [ ! -f "$1" ]; then
+        say "$2" MISSING
+        errors=$((errors + 1))
+    else
+        say "$2" "$1"
+    fi
+}
+run() {
+    say kernel "$KERNEL"
+    say architecture "$(uname -m)"
+    say compiler "$(cat /proc/version 2>/dev/null | cut -c 1-200)"
+    if [ -d "$BUILD" ]; then
+        say build_tree "$(readlink -f "$BUILD" 2>/dev/null || echo "$BUILD")"
+    else
+        say build_tree MISSING
+        errors=$((errors + 1))
+    fi
+    require_file "$BUILD/Module.symvers" module_symvers
+    require_file "$BUILD/.config" kernel_config
+    if [ -r "$BUILD/.config" ]; then
+        grep -E '^CONFIG_(MODVERSIONS|MODULE_SIG|MODULE_UNLOAD)=' "$BUILD/.config" || :
+    fi
+    for module in uwe5622_bsp_sdio sprdwl_ng; do
+        path=$(modinfo -n "$module" 2>/dev/null || :)
+        if [ -z "$path" ] || [ ! -f "$path" ]; then
+            say "$module.path" UNAVAILABLE
+            errors=$((errors + 1))
+            continue
+        fi
+        say "$module.path" "$path"
+        say "$module.sha256" "$(sha256sum "$path" | awk '{print $1}')"
+        vermagic=$(modinfo -F vermagic "$path" 2>/dev/null || :)
+        say "$module.vermagic" "$vermagic"
+        case "$vermagic" in
+            "$KERNEL "*) : ;;
+            *) errors=$((errors + 1)); say "$module.abi" MISMATCH ;;
+        esac
+        say "$module.depends" "$(modinfo -F depends "$path" 2>/dev/null || :)"
+    done
+    for f in /lib/firmware/uwe5622/wcnmodem.bin /lib/firmware/wcnmodem.bin; do
+        [ -f "$f" ] || continue
+        say "firmware.$(basename "$f")" "$(sha256sum "$f" | awk '{print $1}') ($f)"
+    done
+    say abi_preflight_errors "$errors"
+}
+case "${1:-status}" in
+    status) run; exit 0 ;;
+    strict)
+        command -v modinfo >/dev/null 2>&1 || { echo "modinfo required" >&2; exit 1; }
+        command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum required" >&2; exit 1; }
+        run
+        [ "$errors" -eq 0 ]
+        ;;
+    *) echo "Usage: $0 [status|strict]" >&2; exit 2 ;;
+esac

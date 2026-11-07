@@ -1,0 +1,102 @@
+name: UWE5622 combined Wi-Fi and Bluetooth modules (ARM64)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/uwe5622-combined-modules.yml'
+      - 'platform/armbian-image/**'
+      - 'platform/uwe5622/patches/**'
+      - 'platform/uwe5622/wifi/patches/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integrated:
+    name: Native ARM64 / Wi-Fi ${{ matrix.wifi }} / BT ${{ matrix.bt }}
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:trixie
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - wifi: p0
+            bt: stock
+          - wifi: p0
+            bt: patched
+          - wifi: apsta
+            bt: stock
+          - wifi: apsta
+            bt: patched
+    env:
+      KVER: 6.18.60-current-sunxi64
+      HEADERS: linux-headers-current-sunxi64_26.11.0-trunk.120_arm64__6.18.60-Sf45e-D68f5-P034b-Cecfd-H0759-HK01ba-Vc222-B0577-R448a.deb
+      HEADERS_SHA256: ff5247313924b0851af4983466483050b25a2434aa65f9acae99631c1c999cc6
+      UWE_REF: bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880
+      OPENWRT_REF: 29b6faf6b08a2b62097e509eb0fa62720ab48996
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM64 build toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            make gcc libc6-dev bison flex libssl-dev libelf-dev bc git curl \
+            patch binutils kmod file dwarves ca-certificates xz-utils python3-minimal
+      - name: Install pinned matching Armbian headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --connect-timeout 15 --max-time 240 \
+            "https://repo.armbian.com/incoming/community/debs-beta/$HEADERS" -o /tmp/headers.deb
+          echo "$HEADERS_SHA256  /tmp/headers.deb" | sha256sum -c -
+          test "$(dpkg-deb -f /tmp/headers.deb Version)" = "26.11.0-trunk.120"
+          dpkg -i /tmp/headers.deb
+          test -s "/lib/modules/$KVER/build/Module.symvers"
+      - name: Prepare reviewed Wi-Fi and BT source patch combination
+        shell: bash
+        env:
+          MEDVETALKIE_BT_PATCHES: ${{ matrix.bt == 'patched' && 'yes' || 'no' }}
+        run: |
+          set -euo pipefail
+          git clone -q https://github.com/armbian/uwe5622.git uwe5622
+          git -C uwe5622 checkout -q --detach "$UWE_REF"
+          git clone -q https://github.com/Medvedolog/opiz3-wlan-backport.git openwrt
+          git -C openwrt checkout -q --detach "$OPENWRT_REF"
+          bash platform/armbian-image/apply-source-profile.sh uwe5622 openwrt '${{ matrix.wifi }}'
+      - name: Compile BSP, Wi-Fi and Bluetooth transport against one kernel ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          KDIR="/lib/modules/$KVER/build"
+          SRC="$PWD/uwe5622"
+          make -C "$KDIR" -j2 M="$SRC/unisocwcn" CONFIG_AW_WIFI_DEVICE_UWE5622=y \
+            UNISOC_FW_PATH_CONFIG=/lib/firmware/uwe5622/ modules
+          test -s "$SRC/unisocwcn/Module.symvers"
+          make -C "$KDIR" -j2 M="$SRC/unisocwifi" CONFIG_WLAN_UWE5622=m \
+            UNISOC_BSP_INCLUDE="$SRC/unisocwcn/include" \
+            KBUILD_EXTRA_SYMBOLS="$SRC/unisocwcn/Module.symvers" modules
+          make -C "$KDIR" -j2 M="$SRC/tty-sdio" CONFIG_TTY_OVERY_SDIO=m \
+            UNISOC_BSP_INCLUDE="$SRC/unisocwcn/include" \
+            KBUILD_EXTRA_SYMBOLS="$SRC/unisocwcn/Module.symvers" modules
+          mkdir -p artifact
+          for m in "$SRC/unisocwcn/uwe5622_bsp_sdio.ko" "$SRC/unisocwifi/sprdwl_ng.ko" "$SRC/tty-sdio/sprdbt_tty.ko"; do
+            test -s "$m"
+            test "$(modinfo -F vermagic "$m" | cut -d' ' -f1)" = "$KVER"
+            readelf -h "$m" | grep -q 'Machine:.*AArch64'
+            cp "$m" artifact/
+          done
+          printf 'Wi-Fi: ${{ matrix.wifi }}\nBT: ${{ matrix.bt }}\nKernel: %s\nUWE source: %s\nPatch source: %s\nUnverified on hardware.\n' \
+            "$KVER" "$UWE_REF" "$OPENWRT_REF" > artifact/BUILD-PROVENANCE.txt
+          (cd artifact && sha256sum ./*.ko > SHA256SUMS)
+      - name: Archive experimental combined modules
+        uses: actions/upload-artifact@v4
+        with:
+          name: uwe5622-combined-${{ matrix.wifi }}-bt-${{ matrix.bt }}-6.18.60-UNTESTED
+          path: artifact/
+          retention-days: 7
+          if-no-files-found: error

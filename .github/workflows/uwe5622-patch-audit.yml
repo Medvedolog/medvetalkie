@@ -1,0 +1,69 @@
+name: UWE5622 upstream patch audit
+
+on:
+  push:
+    paths:
+      - 'platform/uwe5622/wifi/**'
+      - '.github/workflows/uwe5622-patch-audit.yml'
+  pull_request:
+    paths:
+      - 'platform/uwe5622/wifi/**'
+      - '.github/workflows/uwe5622-patch-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-patch-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UPSTREAM_SHA: bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880
+      OPENWRT_SHA: 29b6faf6b08a2b62097e509eb0fa62720ab48996
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout pinned sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/armbian/uwe5622.git "$RUNNER_TEMP/uwe-upstream"
+          git -C "$RUNNER_TEMP/uwe-upstream" checkout --quiet "$UPSTREAM_SHA"
+          git clone --quiet https://github.com/Medvedolog/opiz3-wlan-backport.git "$RUNNER_TEMP/uwe-openwrt"
+          git -C "$RUNNER_TEMP/uwe-openwrt" checkout --quiet "$OPENWRT_SHA"
+          test "$(git -C "$RUNNER_TEMP/uwe-upstream" rev-parse HEAD)" = "$UPSTREAM_SHA"
+          test "$(git -C "$RUNNER_TEMP/uwe-openwrt" rev-parse HEAD)" = "$OPENWRT_SHA"
+      - name: Check selected conflicts against unmodified upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          for id in 030 290; do
+            patch=$(find "$RUNNER_TEMP/uwe-openwrt/package/kernel/uwe5622/patches" -name "$id-*.patch" -print -quit)
+            if git -C "$RUNNER_TEMP/uwe-upstream" apply --check --recount -- "$patch"; then
+              echo "::notice::pristine upstream: $id applies cleanly"
+            else
+              echo "::warning::pristine upstream: $id requires rebasing"
+            fi
+          done
+      - name: Test staged Armbian-specific patch 030
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C "$RUNNER_TEMP/uwe-upstream" apply --check --recount \
+            "$GITHUB_WORKSPACE/platform/uwe5622/wifi/patches/030-cfg80211-netdev-locking-armbian.patch"
+      - name: Audit 30 patches without building modules
+        shell: bash
+        run: |
+          bash platform/uwe5622/wifi/tests/audit-patches.sh \
+            "$RUNNER_TEMP/uwe-upstream" \
+            "$RUNNER_TEMP/uwe-openwrt/package/kernel/uwe5622/patches" \
+            "$RUNNER_TEMP/uwe5622-patch-audit.md"
+          cat "$RUNNER_TEMP/uwe5622-patch-audit.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: uwe5622-static-patch-audit
+          path: |
+            ${{ runner.temp }}/uwe5622-patch-audit.md
+            ${{ runner.temp }}/uwe5622-patch-conflicts.txt
+          retention-days: 14

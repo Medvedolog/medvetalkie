@@ -1,0 +1,143 @@
+name: MedveTalkie full Armbian image (experimental)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/armbian-full-image.yml'
+      - 'platform/armbian-image/**'
+      - 'platform/uwe5622/patches/**'
+      - 'platform/uwe5622/wifi/patches/**'
+  workflow_dispatch:
+    inputs:
+      wifi_profile:
+        description: UWE5622 Wi-Fi patch profile
+        type: choice
+        options: [p0, apsta]
+        default: apsta
+        required: true
+      execution:
+        description: Build machine (home needs WSL2 Linux/X64 armbian-image runner)
+        type: choice
+        options: [hosted, home]
+        default: hosted
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  profile-check:
+    name: Source integration / Wi-Fi ${{ matrix.wifi }} / BT ${{ matrix.bt }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        wifi: [p0, apsta]
+        bt: [stock, patched]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell grammar and integration invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          for script in platform/armbian-image/*.sh; do bash -n "$script"; done
+          ! grep -RnF '\\${' platform/armbian-image
+          grep -F 'ConditionPathExists=/etc/medvetalkie/enable-onboard-bluetooth' platform/armbian-image/medvetalkie-uwe5622.sh
+          grep -F 'INSTALL_HEADERS=yes' platform/armbian-image/medvetalkie-uwe5622.sh
+          grep -F 'Module.symvers' platform/armbian-image/install-image-modules.sh
+      - name: Checkout exact reviewed driver + OpenWrt patch revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone -q https://github.com/armbian/uwe5622.git uwe5622
+          git -C uwe5622 checkout -q --detach bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880
+          git clone -q https://github.com/Medvedolog/opiz3-wlan-backport.git openwrt
+          git -C openwrt checkout -q --detach 29b6faf6b08a2b62097e509eb0fa62720ab48996
+      - name: Apply entire combined source profile
+        shell: bash
+        env:
+          MEDVETALKIE_BT_PATCHES: ${{ matrix.bt == 'patched' && 'yes' || 'no' }}
+        run: |
+          set -euo pipefail
+          bash platform/armbian-image/apply-source-profile.sh uwe5622 openwrt '${{ matrix.wifi }}'
+          git -C uwe5622 diff --check
+          git -C uwe5622 status --short | head -30
+          test -f uwe5622/tty-sdio/Makefile
+          test -f uwe5622/unisocwifi/Makefile
+
+
+  staging-smoke:
+    name: Stage pinned Armbian build tree without compiling image
+    needs: profile-check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble actual Armbian build workspace
+        shell: bash
+        env:
+          WIFI_PROFILE: apsta
+          BT_PROFILE: patched
+        run: |
+          set -euo pipefail
+          bash platform/armbian-image/prepare-full-image.sh "$RUNNER_TEMP/armbian-medvetalkie"
+          test "$(git -C "$RUNNER_TEMP/armbian-medvetalkie" rev-parse HEAD)" = "664d5fdf0efa5284dd85daae15101c5423d6de73"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/extensions/medvetalkie-uwe5622.sh"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-uwe5622-src/install-image-modules.sh"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-uwe5622-src/BUILD-PROVENANCE.txt"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-uwe5622-scripts/uwe5622-recover"
+          echo "Staged Armbian source and patched UWE5622 modules: OK (no image build)"
+
+
+  home-runner-probe:
+    name: Home WSL2 self-hosted runner readiness (read-only)
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-home-probe]')
+    runs-on: [self-hosted, Linux, X64, armbian-image]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read-only runner resources and Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash platform/armbian-image/home-runner-preflight.sh "$RUNNER_TEMP"
+
+  image:
+    name: Native ARM64 full Armbian OS / BT ${{ matrix.bt }}
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[armbian-home-build]') || contains(github.event.head_commit.message, '[armbian-hosted-build]')))
+    needs: [profile-check, staging-smoke]
+    runs-on: ${{ ((github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-hosted-build]')) || inputs.execution == 'hosted') && 'ubuntu-24.04-arm' || fromJSON('["self-hosted","Linux","X64","armbian-image"]') }}
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        bt: [stock, patched]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify selected builder resources and Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash platform/armbian-image/home-runner-preflight.sh "$RUNNER_TEMP"
+      - name: Stage and compile pinned Armbian image
+        shell: bash
+        env:
+          WIFI_PROFILE: ${{ inputs.wifi_profile || 'apsta' }}
+          BT_PROFILE: ${{ matrix.bt }}
+        run: |
+          set -euo pipefail
+          bash platform/armbian-image/prepare-full-image.sh "$RUNNER_TEMP/armbian-build-medvetalkie-${{ matrix.bt }}" --build
+          find "$RUNNER_TEMP/armbian-build-medvetalkie-${{ matrix.bt }}/output/images" -maxdepth 2 -type f -printf '%p %s bytes\n'
+      - name: Upload generated images and checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: medvetalkie-armbian-orangepizero3-${{ inputs.wifi_profile || 'apsta' }}-bt-${{ matrix.bt }}-UNTESTED
+          path: |
+            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.img*
+            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.sha
+            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.sha256
+            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.txt
+          if-no-files-found: error
+          retention-days: 7
