@@ -421,3 +421,46 @@ Use stock Armbian headless first; record kernel version, `uname -a`, hardware id
 4. Dual headset full-duplex is verified on real Orange Pi Zero 3; only then mark intercom as working.
 5. Web settings and HDMI emulator developed independently of SPI arrival.
 6. Power measurements logged externally using a USB 5 V power meter, with experimental CPU governors and limits.
+
+
+## 25. Web Alpha, USB identity and observability (2026-11-12 amendment)
+
+This section is normative for the first web/control implementation; unimplemented features must remain marked as planned. Existing dual-HFP acceptance gates remain unchanged.
+
+### 25.1 Priorities and boundaries
+
+P0: safe inventory of hardware, stable logical bindings, lifecycle/reconnect reporting and read-only diagnostics. P1: authenticated CivetWeb status/configuration UI, BlueZ D-Bus controller/headset management and asynchronous operations. P1: PipeWire/WirePlumber route tests for ATS Mini V4 analog audio via USB input to an A2DP helmet headset, followed by test speech mixing and ducking. P2: Wi-Fi STA/AP setup after coexistence validation with AW859A/UWE5622. SPI LVGL display is deferred; it consumes the same state/event model as WebUI. No fabricated functional HFP, GATT or radio controls.
+
+### 25.2 USB and Bluetooth stable identity
+
+- Never persist USB Bus/Device numbers, /dev/sdX, ALSA card indices, PipeWire numeric node IDs or hciN as device identity; they are volatile after reboot and hotplug.
+- Inventory devices from sysfs/udev: VID/PID, manufacturer/product, optional serial, USB interface and driver, physical-port topology, and (for Bluetooth controllers) controller address. Treat all reported attributes as evidence, not proof of unique identity.
+- Maintain logical roles HEADSET_A, HEADSET_B, BT_CONTROLLER_A/B, RADIO_AUDIO and RADIO_CONTROL independently of runtime enumeration.
+- Match using verified unique serial or controller address where available. Detect duplicate or absent serial numbers. For indistinguishable devices, a previously user-confirmed physical-port binding may be used; moving such a device to another indistinguishable port requires explicit reassignment. Never silently swap two active HFP roles.
+- Device match outcomes: MATCHED, MISSING, AMBIGUOUS, CHANGED. Do not automatically pair unknown headsets, overwrite bonds or reuse another controller's pairing keys.
+- Monitor udev add/remove/change and reconcile desired against observed state with bounded exponential backoff and jitter. On removal, mark only affected routes DEGRADED; never restart the whole core to cure a peripheral failure.
+- Track USB enumeration changes over reboots, device resets, adapter disappearance, controller and headset reconnect counts and route restoration time.
+
+### 25.3 System and Bluetooth diagnostics
+
+- Web diagnostics pages: system (board/revision, Armbian/kernel, service versions, uptime, temperature), memory (MemAvailable, total and per-service RSS/CPU), networking (interface, MAC, IP, Wi-Fi mode/SSID/RSSI if available), USB tree (equivalent to lsusb -t plus errors), Bluetooth (controller stable ID/current hciN, associated headset, profile/codec, actual battery data), event log and health.
+- Surface D-Bus/BlueZ, kernel USB/HCI, PipeWire/WirePlumber and systemd service failures with timestamp, affected logical device, event type, recovery attempts and outcome. Keep bounded history and a downloadable scrubbed diagnostic bundle (no Wi-Fi passwords, pairing keys or secrets).
+- Bluetooth link RSSI in dBm is optional and capability-dependent; an unavailable or stale reading is UNKNOWN, never invented. Reconnect/dropout trends and flapping warnings must still work without RSSI. Initial configurable flapping rule: 5 disconnects in 60 seconds, with hysteresis/cooldown.
+- WebSocket pushes events; metrics are sampled conservatively (initially no faster than one sample per 2 s while diagnostics are open) to avoid disturbing SCO/A2DP and the 1 GB system. Diagnostic collection cannot block the audio realtime path.
+
+### 25.4 Mobile WebUI and control API
+
+- Authenticated pages: Overview, Headsets/Intercom, Radio (ATS Mini and internet radio sources), Network (STA/AP), Hardware and Diagnostics, Settings. The WebUI is usable over wired LAN or Wi-Fi STA before AP coexistence is proven.
+- Core exposes versioned asynchronous, permission-checked control commands with operation IDs; snapshots/events are shared by web and later LVGL over the existing versioned IPC model.
+- API baseline: GET /api/v1/status; GET /api/v1/bt/devices; POST /api/v1/bt/scan; POST /api/v1/bt/pair; PUT /api/v1/bt/roles; GET /api/v1/wifi/networks; POST /api/v1/wifi/connect; GET /api/v1/radio/state; GET /api/v1/radio/presets; POST /api/v1/radio/tune; GET /api/v1/diagnostics/{system,processes,usb,bluetooth,network,events,health}; POST /api/v1/devices/rescan. These paths specify the target design, not existing handlers.
+- ATS Mini presets reside on Orange Pi even when the detachable receiver is missing. Saved desired presets and receiver-observed state are distinct; reconnecting must not blindly overwrite manual radio tuning.
+
+### 25.5 Acceptance tests
+
+1. Across at least five cold boots, previously distinguishable USB devices retain correct logical roles despite changed bus/device, ALSA, PipeWire or hci indices.
+2. Disconnect/reconnect each USB Bluetooth adapter and the USB audio input during operation; unrelated components stay functional, affected routes report DEGRADED then recover if hardware permits.
+3. Attach two identical adapters with missing/duplicate serials; ambiguous mapping never silently swaps headset roles. Confirmed physical port assignments survive repeated boots, and moves are flagged.
+4. Trigger at least five disconnects within 60 s; web reports FLAPPING, counters, last error and recoveries, without aggressive retry loops.
+5. Compare system diagnostics with actual /proc, sysfs, BlueZ and journal state; unsupported RSSI, battery, codec or sensor metrics show UNKNOWN.
+6. Verify authenticated WebUI and diagnostic-export sanitization. Check CPU/RSS of all services and no audio dropout attributable to diagnostic refresh.
+7. Verify ATS Mini analog input -> PipeWire -> one A2DP headset, then speech-file mix and smooth radio ducking; record BLE GATT control separately as unverified until tested.
