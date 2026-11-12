@@ -30,3 +30,8 @@ add_executable(medvetalkie-usb-inventory src/diagnostics/usb_inventory.c)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(medvetalkie-usb-inventory PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+if(BUILD_TESTING)
+  add_test(NAME usb_inventory_fixture
+    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_usb_inventory.sh $<TARGET_FILE:medvetalkie-usb-inventory>)
+endif()
