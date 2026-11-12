@@ -1,4 +1,4 @@
-name: C11 skeleton build
+name: C11 build and tests
 on:
   push:
   pull_request:
@@ -8,6 +8,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Install web dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcivetweb-dev curl
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
