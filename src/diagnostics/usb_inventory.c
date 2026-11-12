@@ -55,6 +55,35 @@ static int usb_device_name(const char *name)
     return 1;
 }
 
+
+/* A serial is only a candidate identity, never a trusted role binding. */
+static int serial_occurrences(const char *root, const char *vid, const char *pid,
+                              const char *serial)
+{
+    DIR *d = opendir(root);
+    struct dirent *entry;
+    int count = 0;
+    if (!d || !serial[0]) {
+        if (d)
+            closedir(d);
+        return 0;
+    }
+    while ((entry = readdir(d)) != NULL) {
+        char path[PATH_MAX], v[128], p[128], sn[256];
+        if (!usb_device_name(entry->d_name))
+            continue;
+        if (snprintf(path, sizeof(path), "%s/%s", root, entry->d_name) >= (int)sizeof(path))
+            continue;
+        attribute(path, "idVendor", v, sizeof(v));
+        attribute(path, "idProduct", p, sizeof(p));
+        attribute(path, "serial", sn, sizeof(sn));
+        if (strcmp(v, vid) == 0 && strcmp(p, pid) == 0 && strcmp(sn, serial) == 0)
+            ++count;
+    }
+    closedir(d);
+    return count;
+}
+
 int main(int argc, char **argv)
 {
     const char *root = "/sys/bus/usb/devices";
@@ -71,7 +100,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Cannot open USB sysfs %s: %s\n", root, strerror(errno));
         return 1;
     }
-    puts("port\tvid\tpid\tserial\tmanufacturer\tproduct\tbusnum\tdevnum");
+    puts("port\tvid\tpid\tserial\tmanufacturer\tproduct\tbusnum\tdevnum\tidentity_hint");
     while ((entry = readdir(d)) != NULL) {
         char dir[PATH_MAX];
         char vid[128], pid[128], serial[256], vendor[256], product[256];
