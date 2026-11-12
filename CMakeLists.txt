@@ -24,3 +24,9 @@ if(BUILD_TESTING)
   target_link_libraries(test_state PRIVATE medvetalkie_common)
   add_test(NAME state_matrix COMMAND test_state)
 endif()
+
+# Read-only diagnostic binary; deliberately does not bind USB device roles.
+add_executable(medvetalkie-usb-inventory src/diagnostics/usb_inventory.c)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(medvetalkie-usb-inventory PRIVATE -Wall -Wextra -Wpedantic)
+endif()
