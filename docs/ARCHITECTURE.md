@@ -11,27 +11,30 @@
 ## Processes
 
 ```text
- Android browser ---- HTTP/WS ----+
-                                   |
-                             medvetalkied (C11)
-                             CivetWeb [planned]
-                             SQLite desired config
-                             mode coordinator
-                                |        |
-                          UNIX IPC     UNIX IPC
-                                |        |
-                      medvetalkie-bt  medvetalkie-ui
-                      BlueZ D-Bus     LVGL SPI/HDMI
-                                |        |
-                                |      GPIO inputs
-                    BlueZ + PipeWire/WirePlumber
-                                |
-                    headset 1   headset 2
+ Android browser -- HTTP (future authenticated interface)
+                      |
+                 medvetalkie-web (C11, CivetWeb)
+                 isolated process, loopback health only in Alpha 0
+                      |
+              versioned Unix IPC [planned]
+                      |
+                 medvetalkied (C11)
+                 SQLite desired config
+                 mode coordinator
+                   |          |
+              UNIX IPC     UNIX IPC
+                   |          |
+          medvetalkie-bt  medvetalkie-ui
+          BlueZ D-Bus     LVGL SPI/HDMI
+                   |          |
+            BlueZ + PipeWire/WirePlumber
+                   |
+              headset 1 / headset 2
 ```
 
-The HTTP server will live within the core in the first iteration. This deliberately means an eventual core-process crash also removes the web UI; **HTTP and core are not failure isolated from one another**. If that causes issues in practice, extracting `medvetalkie-web` requires no new domain protocol because IPC is already defined.
+WebUI is now designed as a separate process to prevent a crash in HTTP code from terminating the core. The initial binary is deliberately limited to loopback `127.0.0.1:8765` and a GET-only `/api/v1/health` endpoint. It reports that core integration is absent. This is **not yet** a remotely accessible/authenticated management interface. Do not expose the loopback diagnostic service by a reverse proxy until authentication, authorization and CSRF protection are implemented. The full IPC connection and status model remain planned.
 
-No audio sample traffic travels through the Unix IPC control protocol. A separate PipeWire routing helper could be introduced if required after hardware validation; do not add processes without a measured reason.
+No audio sample traffic travels through the Unix IPC control protocol. PipeWire/WirePlumber remain independent system services. A separate PipeWire routing helper may be introduced only after hardware validation.
 
 ## Ownership
 

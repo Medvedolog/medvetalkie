@@ -421,3 +421,79 @@ Use stock Armbian headless first; record kernel version, `uname -a`, hardware id
 4. Dual headset full-duplex is verified on real Orange Pi Zero 3; only then mark intercom as working.
 5. Web settings and HDMI emulator developed independently of SPI arrival.
 6. Power measurements logged externally using a USB 5 V power meter, with experimental CPU governors and limits.
+
+
+## 25. Web Alpha, USB identity and observability (2026-11-12 amendment)
+
+This section is normative for the first web/control implementation; unimplemented features must remain marked as planned. Existing dual-HFP acceptance gates remain unchanged.
+
+### 25.1 Priorities and boundaries
+
+P0: safe inventory of hardware, stable logical bindings, lifecycle/reconnect reporting and read-only diagnostics. P1: authenticated CivetWeb status/configuration UI, BlueZ D-Bus controller/headset management and asynchronous operations. P1: PipeWire/WirePlumber route tests for ATS Mini V4 analog audio via USB input to an A2DP helmet headset, followed by test speech mixing and ducking. P2: Wi-Fi STA/AP setup after coexistence validation with AW859A/UWE5622. SPI LVGL display is deferred; it consumes the same state/event model as WebUI. No fabricated functional HFP, GATT or radio controls.
+
+### 25.2 USB and Bluetooth stable identity
+
+- Never persist USB Bus/Device numbers, /dev/sdX, ALSA card indices, PipeWire numeric node IDs or hciN as device identity; they are volatile after reboot and hotplug.
+- Inventory devices from sysfs/udev: VID/PID, manufacturer/product, optional serial, USB interface and driver, physical-port topology, and (for Bluetooth controllers) controller address. Treat all reported attributes as evidence, not proof of unique identity.
+- Maintain logical roles HEADSET_A, HEADSET_B, BT_CONTROLLER_A/B, RADIO_AUDIO and RADIO_CONTROL independently of runtime enumeration.
+- Match using verified unique serial or controller address where available. Detect duplicate or absent serial numbers. For indistinguishable devices, a previously user-confirmed physical-port binding may be used; moving such a device to another indistinguishable port requires explicit reassignment. Never silently swap two active HFP roles.
+- Device match outcomes: MATCHED, MISSING, AMBIGUOUS, CHANGED. Do not automatically pair unknown headsets, overwrite bonds or reuse another controller's pairing keys.
+- Monitor udev add/remove/change and reconcile desired against observed state with bounded exponential backoff and jitter. On removal, mark only affected routes DEGRADED; never restart the whole core to cure a peripheral failure.
+- Track USB enumeration changes over reboots, device resets, adapter disappearance, controller and headset reconnect counts and route restoration time.
+
+### 25.3 System and Bluetooth diagnostics
+
+- Web diagnostics pages: system (board/revision, Armbian/kernel, service versions, uptime, temperature), memory (MemAvailable, total and per-service RSS/CPU), networking (interface, MAC, IP, Wi-Fi mode/SSID/RSSI if available), USB tree (equivalent to lsusb -t plus errors), Bluetooth (controller stable ID/current hciN, associated headset, profile/codec, actual battery data), event log and health.
+- Surface D-Bus/BlueZ, kernel USB/HCI, PipeWire/WirePlumber and systemd service failures with timestamp, affected logical device, event type, recovery attempts and outcome. Keep bounded history and a downloadable scrubbed diagnostic bundle (no Wi-Fi passwords, pairing keys or secrets).
+- Bluetooth link RSSI in dBm is optional and capability-dependent; an unavailable or stale reading is UNKNOWN, never invented. Reconnect/dropout trends and flapping warnings must still work without RSSI. Initial configurable flapping rule: 5 disconnects in 60 seconds, with hysteresis/cooldown.
+- WebSocket pushes events; metrics are sampled conservatively (initially no faster than one sample per 2 s while diagnostics are open) to avoid disturbing SCO/A2DP and the 1 GB system. Diagnostic collection cannot block the audio realtime path.
+
+### 25.4 Mobile WebUI and control API
+
+- Authenticated pages: Overview, Headsets/Intercom, Radio (ATS Mini and internet radio sources), Network (STA/AP), Hardware and Diagnostics, Settings. The WebUI is usable over wired LAN or Wi-Fi STA before AP coexistence is proven.
+- Core exposes versioned asynchronous, permission-checked control commands with operation IDs; snapshots/events are shared by web and later LVGL over the existing versioned IPC model.
+- API baseline: GET /api/v1/status; GET /api/v1/bt/devices; POST /api/v1/bt/scan; POST /api/v1/bt/pair; PUT /api/v1/bt/roles; GET /api/v1/wifi/networks; POST /api/v1/wifi/connect; GET /api/v1/radio/state; GET /api/v1/radio/presets; POST /api/v1/radio/tune; GET /api/v1/diagnostics/{system,processes,usb,bluetooth,network,events,health}; POST /api/v1/devices/rescan. These paths specify the target design, not existing handlers.
+- ATS Mini presets reside on Orange Pi even when the detachable receiver is missing. Saved desired presets and receiver-observed state are distinct; reconnecting must not blindly overwrite manual radio tuning.
+
+### 25.5 Acceptance tests
+
+1. Across at least five cold boots, previously distinguishable USB devices retain correct logical roles despite changed bus/device, ALSA, PipeWire or hci indices.
+2. Disconnect/reconnect each USB Bluetooth adapter and the USB audio input during operation; unrelated components stay functional, affected routes report DEGRADED then recover if hardware permits.
+3. Attach two identical adapters with missing/duplicate serials; ambiguous mapping never silently swaps headset roles. Confirmed physical port assignments survive repeated boots, and moves are flagged.
+4. Trigger at least five disconnects within 60 s; web reports FLAPPING, counters, last error and recoveries, without aggressive retry loops.
+5. Compare system diagnostics with actual /proc, sysfs, BlueZ and journal state; unsupported RSSI, battery, codec or sensor metrics show UNKNOWN.
+6. Verify authenticated WebUI and diagnostic-export sanitization. Check CPU/RSS of all services and no audio dropout attributable to diagnostic refresh.
+7. Verify ATS Mini analog input -> PipeWire -> one A2DP headset, then speech-file mix and smooth radio ducking; record BLE GATT control separately as unverified until tested.
+
+
+## 26. Изоляция отказов и независимые подсистемы (обязательное дополнение от 12.11.2026)
+
+**Требование P0:** сбой отдельной некритичной функции не должен завершать основной демон, уничтожать состояние других подсистем или разрывать исправный голосовой маршрут. Это требование конкретизирует раздел 13 и архитектуру процессов; само по себе описание модульной структуры не подтверждает её работоспособность.
+
+### 26.1. Границы изоляции
+
+- `medvetalkied`: координатор, желаемые режимы, настройки, IPC и основной HTTP API. Не выполняет блокирующий Bluetooth scan, USB polling, сетевой поиск или непосредственную обработку PCM в потоке управления.
+- `medvetalkie-bt`: отдельный процесс для BlueZ D-Bus, жизненного цикла контроллеров, гарнитур, pairing и bounded reconnect. Сбой discovery/scan обязан завершаться по тайм-ауту и отменяться без падения основного демона; операции поиска выполняются асинхронно. Если реальная библиотека поиска способна зависать или аварийно завершать общий BT-процесс, поисковый worker нужно выделить в самостоятельный перезапускаемый процесс.
+- Микширование и маршрутизация — штатные независимые процессы PipeWire/WirePlumber. Отдельный вспомогательный процесс для согласования аудиомаршрутов допускается только при необходимости изоляции; `medvetalkied` не содержит своего цикла PCM и не вызывает длительные аудиооперации синхронно. Сбой аудиооперации переводит затронутый маршрут в DEGRADED, не завершает основной демон. Перезапуск PipeWire может физически прервать звук; гарантировать непрерывность во время падения общего аудиосервера нельзя.
+- WebUI/CivetWeb: ограниченные по времени обработчики и отдельные очереди команд; ошибка браузерного запроса не влияет на Bluetooth/audio. Поскольку на первом этапе HTTP работает внутри `medvetalkied`, это **не полноценная процессная изоляция веб-сервера**. Для строгой защиты основного демона от аварии HTTP-кода перед выпуском требуется вынести веб в отдельный `medvetalkie-web` либо документально принять этот риск.
+- `medvetalkie-ui` (LVGL), ATS Mini radio-control, internet-radio, голосовые уведомления, игры и диагностический сборщик не имеют права останавливать интерком при собственном отказе. Потенциально ненадёжные сторонние библиотеки выполнять вне основного процесса, с лимитами ресурсов.
+- BlueZ и PipeWire являются общими внешними зависимостями нескольких каналов. Их аварийный рестарт не гарантирует бесшовности звука, но не должен обрушать остальные процессы MedveTalkie.
+
+### 26.2. Контракт восстановления и наблюдаемости
+
+- Управление процессами и рестартами — systemd с `Restart=on-failure`, ограничением частоты рестартов и журналированием причины завершения; не добавлять конкурирующий самописный watchdog.
+- IPC: версионирование, авторизация локальных клиентов, не блокирующие запросы, индивидуальные тайм-ауты и предел длины очередей. Обрыв сокета одного модуля не должен блокировать другие модули.
+- После рестарта модуль сначала заново обнаруживает фактическое состояние устройств/графа, затем безопасно сверяет его с желаемым; запрещено считать сохранённое состояние доказательством рабочего соединения.
+- Статусы по каждому модулю: READY, STARTING, DEGRADED, FAILED и RECOVERING; отдельные `last_error`, `restart_count`, время восстановления, число неудачных операций. Логи и WebUI должны различать падение процесса, ошибку операции и физическое исчезновение устройства.
+- При перегрузке или отказе некритичного модуля сохранять приоритет HFP-интеркома; ограничивать CPU/RAM/очереди ресурсоёмких диагностик, веб-запросов, сканирований и аудиовспомогательных задач.
+
+### 26.3. Приёмочные испытания fault injection
+
+1. Принудительно завершить отдельный BT discovery worker (если он выделен) или сорвать/затянуть scan: основной демон остаётся доступен, текущий аудиомаршрут не перезапускается без необходимости, сканирование ограничено тайм-аутом.
+2. Принудительно завершить `medvetalkie-bt`: `medvetalkied`, диагностика и WebUI остаются живы; после рестарта BT-служба восстанавливает наблюдаемое состояние и роли. Возможное прерывание активного HFP во время аварии BT-сервиса фиксируется отдельно.
+3. Убить `medvetalkie-ui` и отдельно спровоцировать ошибку radio-control: исправный интерком продолжает работать.
+4. Завершить helper аудиомаршрутизации (если реализован): основной демон продолжает работу; при падении `pipewire` фиксировать деградацию, восстановление графа и фактическое время прерывания звука.
+5. Создать блокирующий HTTP-запрос и множественные одновременные обращения: основная машина состояний остаётся отзывчивой; аварийное завершение самого встроенного CivetWeb невозможно гарантированно изолировать до выделения отдельного процесса.
+6. Проверить systemd crash-loop policy, отсутствие бесконечных агрессивных реконнектов, верхние пределы RSS/CPU и корректность событий в диагностическом архиве.
+
+**Критерий приёмки:** никакой тест отказа необязательного модуля не должен приводить к падению `medvetalkied`; допустимые кратковременные потери звука из-за общих зависимостей измеряются и документируются отдельно, а не скрываются под статусом READY.
