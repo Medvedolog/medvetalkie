@@ -121,8 +121,11 @@ int main(int argc, char **argv)
         attribute(dir, "product", product, sizeof(product));
         attribute(dir, "busnum", bus, sizeof(bus));
         attribute(dir, "devnum", dev, sizeof(dev));
-        printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-               entry->d_name, vid, pid, serial, vendor, product, bus, dev);
+        printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+               entry->d_name, vid, pid, serial, vendor, product, bus, dev,
+               !serial[0] ? "NO_SERIAL" :
+               serial_occurrences(root, vid, pid, serial) > 1 ?
+               "DUPLICATE_SERIAL" : "SERIAL_CANDIDATE");
     }
     if (closedir(d) != 0)
         return 1;
