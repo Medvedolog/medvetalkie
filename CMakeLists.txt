@@ -35,3 +35,21 @@ if(BUILD_TESTING)
   add_test(NAME usb_inventory_fixture
     COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_usb_inventory.sh $<TARGET_FILE:medvetalkie-usb-inventory>)
 endif()
+
+# Isolated Web Alpha is built only when CivetWeb headers/library are installed.
+find_path(CIVETWEB_INCLUDE_DIR NAMES civetweb.h)
+find_library(CIVETWEB_LIBRARY NAMES civetweb)
+if(CIVETWEB_INCLUDE_DIR AND CIVETWEB_LIBRARY)
+  add_executable(medvetalkie-web src/medvetalkie-web/main.c)
+  target_include_directories(medvetalkie-web PRIVATE ${CIVETWEB_INCLUDE_DIR})
+  target_link_libraries(medvetalkie-web PRIVATE ${CIVETWEB_LIBRARY})
+  if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(medvetalkie-web PRIVATE -Wall -Wextra -Wpedantic)
+  endif()
+  if(BUILD_TESTING)
+    add_test(NAME web_health
+      COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_web_health.sh $<TARGET_FILE:medvetalkie-web>)
+  endif()
+else()
+  message(STATUS "CivetWeb not installed: medvetalkie-web target disabled")
+endif()
