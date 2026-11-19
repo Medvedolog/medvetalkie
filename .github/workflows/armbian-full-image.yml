@@ -47,7 +47,7 @@ jobs:
           grep -F 'INSTALL_HEADERS=yes' platform/armbian-image/medvetalkie-uwe5622.sh
           grep -F 'Module.symvers' platform/armbian-image/install-image-modules.sh
           grep -F 'NETWORKING_STACK=network-manager' platform/armbian-image/prepare-full-image.sh
-          grep -F 'dnsmasq-base' platform/armbian-image/medvetalkie-uwe5622.sh
+          grep -F 'dnsmasq-base firmware-realtek usbutils' platform/armbian-image/medvetalkie-uwe5622.sh
           grep -F 'kernel_extra_create_patches__medvetalkie_rtc_patch_guard' platform/armbian-image/medvetalkie-uwe5622.sh
           grep -F 'pcf8563_driver.driver.name, pcf8563);' platform/armbian-image/medvetalkie-uwe5622.sh
           bash platform/armbian-image/tests/check-rtc-patch-guard.sh

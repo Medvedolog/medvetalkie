@@ -8,7 +8,9 @@ function extension_prepare_config__medvetalkie_network() {
     exit_with_error "MedveTalkie image requires NETWORKING_STACK=network-manager"
   fi
   # NetworkManager shared mode uses dnsmasq for DHCP/DNS on each isolated subnet.
-  add_packages_to_image dnsmasq-base
+  # NetworkManager shared mode needs dnsmasq; common UGREEN/Realtek USB
+  # Bluetooth adapters need firmware-realtek. usbutils provides lsusb inventory.
+  add_packages_to_image dnsmasq-base firmware-realtek usbutils
 }
 
 # Armbian's pinned sunxi 6.18 tree already contains this RTC fix. Its
@@ -139,7 +141,7 @@ function post_family_tweaks__medvetalkie_safety_defaults() {
     "${root}/etc/modules-load.d/medvetalkie-bt.conf" \
     "${root}/etc/systemd/system/medvetalkie-usb-bt.service"
   # The upstream Armbian board extension enables the onboard BT attach unit.
-  # Guard its activation to avoid conflicts with two USB UGREEN CM390 dongles.
+  # Guard its activation to avoid conflicts with the two external UGREEN USB adapters.
   # This DOES NOT blacklist sprdbt_tty or disable BlueZ/USB Bluetooth.
   printf '[Unit]\nConditionPathExists=/etc/medvetalkie/enable-onboard-bluetooth\n' \
     > "${root}/etc/systemd/system/aw859a-bluetooth.service.d/10-medvetalkie-opt-in.conf"

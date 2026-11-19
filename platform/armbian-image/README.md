@@ -179,7 +179,7 @@ Wi-Fi defaults: SSID `MedveTalkie`, password `Medve12345!`. The two interfaces a
 
 **Credential warning:** this repository is public, so the requested default Wi-Fi password is visible to anyone who can read the source. It is suitable only as a lab/bootstrap password; change it before deploying the image in a shared or untrusted environment. The keyfile is installed mode `0600`.
 
-Two external USB Bluetooth adapters are expected. The image loads `btusb`, enables BlueZ and unblocks Bluetooth radios. The built-in AW859A SDIO Bluetooth attach remains disabled unless `/etc/medvetalkie/enable-onboard-bluetooth` is explicitly created. The passive inventory utility `/usr/local/sbin/medvetalkie-bt-diagnose` maps HCI controllers to USB topology; `/usr/local/sbin/medvetalkie-network-check` reports the first-boot network state.
+Two external USB Bluetooth adapters are expected. The image loads `btusb`, enables BlueZ, installs `firmware-realtek` for common Realtek USB Bluetooth chipsets and includes `usbutils` for inventory. The exact UGREEN chipset is not yet identified; if the adapters use another vendor chipset, hardware testing may show that another firmware package is required. The built-in AW859A SDIO Bluetooth attach remains disabled unless `/etc/medvetalkie/enable-onboard-bluetooth` is explicitly created. The passive inventory utility `/usr/local/sbin/medvetalkie-bt-diagnose` maps HCI controllers to USB topology; `/usr/local/sbin/medvetalkie-network-check` reports the first-boot network state.
 
 ## Boot and safety
 
