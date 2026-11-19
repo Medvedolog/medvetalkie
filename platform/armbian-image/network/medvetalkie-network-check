@@ -1,0 +1,35 @@
+#!/bin/sh
+# Read-only first-boot network diagnostics for MedveTalkie.
+set -u
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+echo '=== MEDVETALKIE NETWORK STATUS ==='
+date -u '+UTC %Y-%m-%dT%H:%M:%SZ'
+echo
+echo '=== NETWORKMANAGER ==='
+if command -v nmcli >/dev/null 2>&1; then
+    nmcli -f DEVICE,TYPE,STATE,CONNECTION device status 2>&1 || :
+    echo '-- configured profiles --'
+    nmcli -f NAME,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show 2>&1 || :
+else
+    echo 'nmcli unavailable'
+fi
+echo
+echo '=== ADDRESSES ==='
+ip -br link 2>&1 || :
+ip -br address 2>&1 || :
+echo
+echo '=== WIFI ==='
+if command -v iw >/dev/null 2>&1; then
+    iw dev 2>&1 || :
+else
+    echo 'iw unavailable'
+fi
+echo
+echo '=== DHCP/DNS LISTENERS ==='
+if command -v ss >/dev/null 2>&1; then
+    ss -lunp 2>&1 | grep -E ':(53|67)([[:space:]]|$)' || :
+fi
+echo
+echo 'Expected: end0=192.168.11.1/24; wlan0 AP=192.168.12.1/24.'
+echo 'NetworkManager shared mode provides isolated DHCP/DNS scopes per interface.'

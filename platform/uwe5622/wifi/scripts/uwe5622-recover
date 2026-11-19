@@ -1,0 +1,110 @@
+#!/bin/sh
+# AW859A/UWE5622 CP-assert recovery. EXPERIMENTAL, opt-in, never enabled by default.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+TAG=uwe5622-recover
+STATE_DIR=/var/lib/medvetalkie/uwe5622
+STATE=$STATE_DIR/attempts
+LOCK=/run/lock/medvetalkie-uwe5622.lock
+OPT_IN=/etc/medvetalkie/allow-uwe5622-sdio-reset
+WINDOW=1800
+MAX_TRIES=3
+
+log() { logger -t "$TAG" -- "$*" 2>/dev/null || printf '%s\n' "$*" >&2; }
+fail() { log "REFUSED: $*"; exit 1; }
+module_loaded() { [ -d "/sys/module/$1" ]; }
+phy_present() {
+    for p in /sys/class/ieee80211/*; do
+        [ -d "$p" ] || continue
+        [ "$(cat "$p/device/modalias" 2>/dev/null || :)" = "platform:unisoc_wifi" ] && return 0
+    done
+    return 1
+}
+# Never assume mmc1, and never reset the SD-card host.
+host_path() {
+    found=
+    for h in /sys/class/mmc_host/*; do
+        [ -d "$h" ] || continue
+        [ -e "$h/device/of_node/mmc-pwrseq" ] || continue
+        device=$(readlink -f "$h/device") || continue
+        [ -e "$device/driver/unbind" ] && [ -e "$device/driver/bind" ] || continue
+        [ -z "$found" ] || return 1
+        found=$device
+    done
+    [ -n "$found" ] || return 1
+    printf '%s\n' "$found"
+}
+status() {
+    printf 'opt_in=%s\n' "$([ -f "$OPT_IN" ] && echo yes || echo no)"
+    printf 'bsp_loaded=%s\n' "$(module_loaded uwe5622_bsp_sdio && echo yes || echo no)"
+    printf 'wifi_loaded=%s\n' "$(module_loaded sprdwl_ng && echo yes || echo no)"
+    printf 'phy_present=%s\n' "$(phy_present && echo yes || echo no)"
+    printf 'sdio_host=%s\n' "$(host_path || echo unavailable-or-ambiguous)"
+    if [ -r "$STATE" ]; then
+        now=$(date +%s)
+        awk -v now="$now" -v win="$WINDOW" '($1 <= now) && (now - $1 < win) {n++} END {print "attempts_in_window=" n+0}' "$STATE"
+    else
+        echo attempts_in_window=0
+    fi
+}
+case "${1:-}" in
+    status) status; exit 0 ;;
+    dry-run) status; echo 'No changes: dry-run only'; exit 0 ;;
+    --cp-assert-confirmed) ;;
+    *) echo "Usage: $0 status|dry-run|--cp-assert-confirmed" >&2; exit 2 ;;
+esac
+
+[ "$(id -u)" -eq 0 ] || fail "requires root"
+[ -f "$OPT_IN" ] || fail "missing explicit opt-in $OPT_IN"
+command -v flock >/dev/null 2>&1 || fail "flock missing"
+command -v timeout >/dev/null 2>&1 || fail "timeout missing"
+[ -d /sys/module/uwe5622_bsp_sdio ] || fail "BSP not loaded"
+[ -d /sys/module/sprdwl_ng ] || fail "WLAN module not loaded"
+# Safety: firmware assert must be confirmed by operator or external validated detector.
+# Passing this argument is an explicit assertion; no network reachability heuristic.
+host=$(host_path) || fail "cannot uniquely identify resettable SDIO host"
+driver=$(readlink -f "$host/driver") || fail "SDIO host driver unavailable"
+name=${host##*/}
+[ -w "$driver/unbind" ] && [ -w "$driver/bind" ] || fail "SDIO bind endpoints not writable"
+
+exec 9>"$LOCK"
+flock -n 9 || fail "another recovery is in progress"
+mkdir -p "$STATE_DIR"
+chmod 700 "$STATE_DIR"
+now=$(date +%s)
+tmp=$(mktemp "$STATE_DIR/.attempts.XXXXXX")
+trap 'rm -f "$tmp"' EXIT HUP INT TERM
+if [ -r "$STATE" ]; then
+    awk -v now="$now" -v win="$WINDOW" '($1 <= now) && (now - $1 < win) {print $1}' "$STATE" > "$tmp"
+fi
+count=$(wc -l < "$tmp")
+[ "$count" -lt "$MAX_TRIES" ] || fail "$count attempts in $WINDOW seconds; limit reached"
+printf '%s\n' "$now" >> "$tmp"
+chmod 600 "$tmp"
+mv -f "$tmp" "$STATE"
+trap - EXIT HUP INT TERM
+log "CP-assert recovery $((count+1))/$MAX_TRIES; host=$name"
+
+# Do not call NetworkManager, reload Ethernet, touch firmware, or touch Bluetooth.
+# A bounded rmmod prevents hanging the recovery process, but D-state tasks may persist.
+timeout -k 2s 20s rmmod sprdwl_ng || fail "sprdwl_ng could not unload; STOP"
+module_loaded sprdwl_ng && fail "sprdwl_ng still loaded; STOP"
+timeout -k 2s 20s rmmod uwe5622_bsp_sdio || fail "BSP could not unload (patch 250 may be absent); STOP"
+module_loaded uwe5622_bsp_sdio && fail "BSP still loaded; STOP"
+printf '%s' "$name" > "$driver/unbind" || fail "host unbind failed; STOP"
+sleep 1
+printf '%s' "$name" > "$driver/bind" || fail "host bind failed; STOP"
+# Only load modules already installed on this exact system.
+timeout -k 2s 30s modprobe uwe5622_bsp_sdio || fail "BSP reload failed; STOP"
+sleep 5
+timeout -k 2s 30s modprobe sprdwl_ng disable_powersave=1 || fail "WLAN reload failed; STOP"
+i=0
+while [ "$i" -lt 30 ]; do
+    if phy_present; then
+        log "WLAN phy returned; network association remains under system network manager"
+        exit 0
+    fi
+    sleep 1
+    i=$((i+1))
+done
+fail "WLAN phy did not return within 30s"

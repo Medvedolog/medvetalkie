@@ -1,0 +1,17 @@
+[connection]
+id=MedveTalkie Ethernet LAN
+uuid=4d8c2a11-1c2b-4b7d-9a10-192168110001
+type=ethernet
+interface-name=end0
+autoconnect=true
+autoconnect-priority=100
+
+[ethernet]
+
+[ipv4]
+method=shared
+address1=192.168.11.1/24
+never-default=true
+
+[ipv6]
+method=ignore

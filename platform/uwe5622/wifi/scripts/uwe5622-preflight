@@ -1,0 +1,62 @@
+#!/bin/sh
+# MedveTalkie AW859A/UWE5622 read-only Armbian preflight.
+# No module unload, SDIO reset, network restart or configuration writes.
+set -u
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+find_phy() {
+    for p in /sys/class/ieee80211/*; do
+        [ -d "$p" ] || continue
+        alias=$(cat "$p/device/modalias" 2>/dev/null || :)
+        if [ "$alias" = "platform:unisoc_wifi" ]; then
+            printf '%s\n' "${p##*/}"
+        fi
+    done
+}
+find_sdio_host() {
+    for h in /sys/class/mmc_host/*; do
+        [ -d "$h" ] || continue
+        [ -e "$h/device/of_node/mmc-pwrseq" ] || continue
+        readlink -f "$h/device" || :
+    done
+}
+field() { printf '%-24s %s\n' "$1" "$2"; }
+report() {
+    field kernel "$(uname -r)"
+    field board "$(tr -d '\000' < /proc/device-tree/model 2>/dev/null || echo unknown)"
+    field phy "$(find_phy | paste -sd, -)"
+    field sdio_host "$(find_sdio_host | paste -sd, -)"
+    for mod in uwe5622_bsp_sdio sprdwl_ng; do
+        if [ -d "/sys/module/$mod" ]; then
+            field "module_$mod" loaded
+            for param in disable_powersave max_bw_2g max_bw_5g; do
+                if [ -r "/sys/module/$mod/parameters/$param" ]; then
+                    field "$mod.$param" "$(cat "/sys/module/$mod/parameters/$param")"
+                fi
+            done
+        else
+            field "module_$mod" absent
+        fi
+        if command -v modinfo >/dev/null 2>&1; then
+            field "$mod.filename" "$(modinfo -n "$mod" 2>/dev/null || echo unavailable)"
+            field "$mod.vermagic" "$(modinfo -F vermagic "$mod" 2>/dev/null || echo unavailable)"
+        fi
+    done
+    if command -v systemctl >/dev/null 2>&1; then
+        for svc in NetworkManager systemd-networkd wpa_supplicant hostapd; do
+            field "service_$svc" "$(systemctl is-active "$svc" 2>/dev/null || :)"
+        done
+    fi
+    if command -v iw >/dev/null 2>&1; then
+        iw dev || :
+    fi
+}
+case "${1:-status}" in
+    status|dry-run)
+        report
+        if [ "${1:-}" = dry-run ]; then
+            echo "DRY RUN: no driver or network operations performed."
+        fi
+        ;;
+    *) echo "Usage: $0 [status|dry-run]" >&2; exit 2 ;;
+esac
