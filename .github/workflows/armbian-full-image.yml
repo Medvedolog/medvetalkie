@@ -50,6 +50,7 @@ jobs:
           grep -F 'dnsmasq-base' platform/armbian-image/medvetalkie-uwe5622.sh
           grep -F 'kernel_extra_create_patches__medvetalkie_rtc_patch_guard' platform/armbian-image/medvetalkie-uwe5622.sh
           grep -F 'pcf8563_driver.driver.name, pcf8563);' platform/armbian-image/medvetalkie-uwe5622.sh
+          bash platform/armbian-image/tests/check-rtc-patch-guard.sh
           sh platform/armbian-image/tests/check-network-profiles.sh
           sh -n platform/armbian-image/network/medvetalkie-network-check
           sh -n platform/bluetooth/diagnose-passive.sh
