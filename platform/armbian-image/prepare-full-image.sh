@@ -5,6 +5,8 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT=$(realpath "$HERE/../..")
 DEST=$(realpath -m "${1:-$PWD/armbian-build-medvetalkie}")
+NETWORK="$DEST/userpatches/medvetalkie-network"
+DOCS="$DEST/userpatches/medvetalkie-docs"
 WIFI_PROFILE=${WIFI_PROFILE:-apsta}
 BT_PROFILE=${BT_PROFILE:-stock}
 ARM_REF=664d5fdf0efa5284dd85daae15101c5423d6de73
