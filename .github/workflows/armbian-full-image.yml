@@ -61,9 +61,9 @@ jobs:
           git -C uwe5622 checkout -q --detach bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880
           git clone -q https://github.com/Medvedolog/opiz3-wlan-backport.git openwrt
           git -C openwrt checkout -q --detach 29b6faf6b08a2b62097e509eb0fa62720ab48996
-      - name: Apply entire combined source profile
+      - name: Apply Wi-Fi source profile with stock Bluetooth
         shell: bash
-                run: |
+        run: |
           set -euo pipefail
           bash platform/armbian-image/apply-source-profile.sh uwe5622 openwrt '${{ matrix.wifi }}'
           git -C uwe5622 diff --check
@@ -119,12 +119,8 @@ jobs:
     name: Native ARM64 full Armbian OS / USB BT stock
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[armbian-home-build]') || contains(github.event.head_commit.message, '[armbian-hosted-build]')))
     needs: [profile-check, staging-smoke]
-    runs-on: ${{ ((github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-hosted-build]')) || inputs.execution == 'hosted') && 'ubuntu-24.04-arm' || fromJSON('["self-hosted","Linux","X64","armbian-image"]') }}
+    runs-on: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-hosted-build]') || inputs.execution == 'hosted') && 'ubuntu-24.04-arm' || fromJSON('[\"self-hosted\",\"Linux\",\"X64\",\"armbian-image\"]') }}
     timeout-minutes: 300
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
     steps:
       - uses: actions/checkout@v4
       - name: Verify selected builder resources and Docker
@@ -140,7 +136,7 @@ jobs:
         run: |
           set -euo pipefail
           bash platform/armbian-image/prepare-full-image.sh "$RUNNER_TEMP/armbian-build-medvetalkie-stock" --build
-          find "$RUNNER_TEMP/armbian-build-medvetalkie-stock/output/images" -maxdepth 2 -type f -printf '%p %s bytes\n'
+          find "$RUNNER_TEMP/armbian-build-medvetalkie-stock/output/images" -maxdepth 2 -type f -printf '%p %s bytes\\n'
       - name: Upload generated images and checksums
         uses: actions/upload-artifact@v4
         with:
