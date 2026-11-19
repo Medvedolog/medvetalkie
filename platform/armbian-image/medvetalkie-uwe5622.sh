@@ -31,8 +31,25 @@ function kernel_extra_create_patches__medvetalkie_rtc_patch_guard() {
     grep -Fq 'pcf8563_driver.driver.name, client);' "${patch_file}" || \
       exit_with_error "MedveTalkie RTC guard: expected old dev_id hunk missing" "${patch_file}"
 
+    local series_file="${SRC}/patch/kernel/${KERNELPATCHDIR}/series.conf"
+    local series_entry="patches.armbian/${patch_file##*/}"
+    local series_tmp
+    [[ -s "${series_file}" ]] || exit_with_error "MedveTalkie RTC guard: series.conf missing" "${series_file}"
+    grep -Fxq "${series_entry}" "${series_file}" || \
+      exit_with_error "MedveTalkie RTC guard: patch exists but exact series entry is missing" "${series_file}"
+    series_tmp="$(mktemp "${series_file}.XXXXXX")"
+    if ! awk -v target="${series_entry}" '
+      $0 == target { removed++; next }
+      { print }
+      END { if (removed != 1) exit 1 }
+    ' "${series_file}" > "${series_tmp}"; then
+      rm -f "${series_tmp}"
+      exit_with_error "MedveTalkie RTC guard: expected exactly one series.conf entry" "${series_file}"
+    fi
+    cat "${series_tmp}" > "${series_file}"
+    rm -f "${series_tmp}"
     rm -- "${patch_file}"
-    display_alert "MedveTalkie: skipped duplicate upstream RTC fix" "verified pcf8563 dev_id already correct" "info"
+    display_alert "MedveTalkie: skipped duplicate upstream RTC fix and exact series entry" "verified pcf8563 dev_id already correct" "info"
   else
     display_alert "MedveTalkie: RTC fix not present in base source" "keeping Armbian patch enabled" "info"
   fi
