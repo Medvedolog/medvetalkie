@@ -36,13 +36,26 @@ function kernel_extra_create_patches__medvetalkie_rtc_patch_guard() {
     local series_tmp
     [[ -s "${series_file}" ]] || exit_with_error "MedveTalkie RTC guard: series.conf missing" "${series_file}"
     local series_matches
-    series_matches=$(awk -v target="${series_entry}" '$1 == target { n++ } END { print n+0 }' "${series_file}")
+    series_matches=$(awk -v target="${series_entry}" '
+      {
+        line = $0
+        sub(/^[[:space:]]+/, "", line)
+        sub(/[[:space:]\r]+$/, "", line)
+        if (line == target) n++
+      }
+      END { print n+0 }
+    ' "${series_file}")
     [[ "${series_matches}" == 1 ]] || \
       exit_with_error "MedveTalkie RTC guard: expected exactly one series entry" "${series_file}"
     series_tmp="$(mktemp "${series_file}.XXXXXX")"
     if ! awk -v target="${series_entry}" '
-      $1 == target { removed++; next }
-      { print }
+      {
+        line = $0
+        sub(/^[[:space:]]+/, "", line)
+        sub(/[[:space:]\r]+$/, "", line)
+        if (line == target) { removed++; next }
+        print
+      }
       END { if (removed != 1) exit 1 }
     ' "${series_file}" > "${series_tmp}"; then
       rm -f "${series_tmp}"

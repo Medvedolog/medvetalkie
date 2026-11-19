@@ -27,18 +27,18 @@ mkdir -p "$PATCH_DIR" "$SOURCE_DIR"
 # Case 1: fixed base source: remove only its series entry and patch file.
 printf '\tpcf8563_driver.driver.name, pcf8563);\n' > "$SOURCE_DIR/rtc-pcf8563.c"
 printf '+\tpcf8563_driver.driver.name, pcf8563);\n-\tpcf8563_driver.driver.name, client);\n' > "$PATCH_DIR/$PATCH_NAME"
-printf '\t%s\n' "$SERIES_ENTRY" 'patches.armbian/keep-this-unrelated.patch' > "$SERIES_FILE"
+printf ' \t%s  \r\n\t%s\r\n' "$SERIES_ENTRY" 'patches.armbian/keep-this-unrelated.patch' > "$SERIES_FILE"
 kernel_extra_create_patches__medvetalkie_rtc_patch_guard
 test ! -e "$PATCH_DIR/$PATCH_NAME"
-! awk -v target="$SERIES_ENTRY" '$1 == target { found=1 } END { exit !found }' "$SERIES_FILE"
-awk '$1 == "patches.armbian/keep-this-unrelated.patch" { found=1 } END { exit !found }' "$SERIES_FILE"
+! awk -v target="$SERIES_ENTRY" '{ line=$0; sub(/^[[:space:]]+/, "", line); sub(/[[:space:]\r]+$/, "", line); if (line == target) found=1 } END { exit !found }' "$SERIES_FILE"
+awk '{ line=$0; sub(/^[[:space:]]+/, "", line); sub(/[[:space:]\r]+$/, "", line); if (line == "patches.armbian/keep-this-unrelated.patch") found=1 } END { exit !found }' "$SERIES_FILE"
 
 # Case 2: unfixed base source: keep both patch and series entry.
 printf '\tpcf8563_driver.driver.name, client);\n' > "$SOURCE_DIR/rtc-pcf8563.c"
 printf '+\tpcf8563_driver.driver.name, pcf8563);\n-\tpcf8563_driver.driver.name, client);\n' > "$PATCH_DIR/$PATCH_NAME"
-printf '\t%s\n' "$SERIES_ENTRY" 'patches.armbian/keep-this-unrelated.patch' > "$SERIES_FILE"
+printf ' \t%s\r\n\t%s\r\n' "$SERIES_ENTRY" 'patches.armbian/keep-this-unrelated.patch' > "$SERIES_FILE"
 kernel_extra_create_patches__medvetalkie_rtc_patch_guard
 test -s "$PATCH_DIR/$PATCH_NAME"
-awk -v target="$SERIES_ENTRY" '$1 == target { found=1 } END { exit !found }' "$SERIES_FILE"
+awk -v target="$SERIES_ENTRY" '{ line=$0; sub(/^[[:space:]]+/, "", line); sub(/[[:space:]\r]+$/, "", line); if (line == target) found=1 } END { exit !found }' "$SERIES_FILE"
 
 echo "PASS: duplicate RTC patch and only its exact series entry are skipped when source already has the fix"
