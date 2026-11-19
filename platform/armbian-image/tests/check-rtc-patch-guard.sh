@@ -31,7 +31,7 @@ printf '\t%s\n' "$SERIES_ENTRY" 'patches.armbian/keep-this-unrelated.patch' > "$
 kernel_extra_create_patches__medvetalkie_rtc_patch_guard
 test ! -e "$PATCH_DIR/$PATCH_NAME"
 ! awk -v target="$SERIES_ENTRY" '$1 == target { found=1 } END { exit !found }' "$SERIES_FILE"
-grep -Fxq 'patches.armbian/keep-this-unrelated.patch' "$SERIES_FILE"
+awk '$1 == "patches.armbian/keep-this-unrelated.patch" { found=1 } END { exit !found }' "$SERIES_FILE"
 
 # Case 2: unfixed base source: keep both patch and series entry.
 printf '\tpcf8563_driver.driver.name, client);\n' > "$SOURCE_DIR/rtc-pcf8563.c"
