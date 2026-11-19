@@ -1,0 +1,12 @@
+[Unit]
+Description=MedveTalkie USB Bluetooth readiness
+After=systemd-modules-load.service
+Before=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/rfkill unblock bluetooth
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

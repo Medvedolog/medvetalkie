@@ -46,6 +46,9 @@ jobs:
           grep -F 'ConditionPathExists=/etc/medvetalkie/enable-onboard-bluetooth' platform/armbian-image/medvetalkie-uwe5622.sh
           grep -F 'INSTALL_HEADERS=yes' platform/armbian-image/medvetalkie-uwe5622.sh
           grep -F 'Module.symvers' platform/armbian-image/install-image-modules.sh
+          grep -F 'NETWORKING_STACK=network-manager' platform/armbian-image/prepare-full-image.sh
+          grep -F 'dnsmasq-base' platform/armbian-image/medvetalkie-uwe5622.sh
+          sh platform/armbian-image/tests/check-network-profiles.sh
       - name: Checkout exact reviewed driver + OpenWrt patch revisions
         shell: bash
         run: |
@@ -84,6 +87,10 @@ jobs:
           bash platform/armbian-image/prepare-full-image.sh "$RUNNER_TEMP/armbian-medvetalkie"
           test "$(git -C "$RUNNER_TEMP/armbian-medvetalkie" rev-parse HEAD)" = "664d5fdf0efa5284dd85daae15101c5423d6de73"
           test -s "$RUNNER_TEMP/armbian-medvetalkie/extensions/medvetalkie-uwe5622.sh"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-network/10-medvetalkie-ethernet.nmconnection"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-network/20-medvetalkie-wifi-ap.nmconnection"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-docs/bluetooth-patches/0001-sprdbt-tty-add-hci-rx-sdio-counters.patch"
+          test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-docs/wifi-patches/030-cfg80211-netdev-locking-armbian.patch"
           test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-uwe5622-src/install-image-modules.sh"
           test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-uwe5622-src/BUILD-PROVENANCE.txt"
           test -s "$RUNNER_TEMP/armbian-medvetalkie/userpatches/medvetalkie-uwe5622-scripts/uwe5622-recover"

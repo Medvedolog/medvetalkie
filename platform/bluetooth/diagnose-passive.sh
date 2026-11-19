@@ -27,6 +27,43 @@ else
 fi
 echo
 
+echo '=== USB HCI TOPOLOGY / PHYSICAL ADAPTERS ==='
+usb_hci_count=0
+for hci in /sys/class/bluetooth/hci*; do
+    [ -e "$hci" ] || continue
+    usb_hci_count=$((usb_hci_count + 1))
+    dev=$(readlink -f "$hci/device" 2>/dev/null || :)
+    node=$dev
+    usb_node=
+    while [ -n "$node" ] && [ "$node" != / ]; do
+        if [ -r "$node/idVendor" ] && [ -r "$node/idProduct" ]; then
+            usb_node=$node
+            break
+        fi
+        node=$(dirname "$node")
+    done
+    if [ -n "$usb_node" ]; then
+        vid=$(cat "$usb_node/idVendor" 2>/dev/null || echo unknown)
+        pid=$(cat "$usb_node/idProduct" 2>/dev/null || echo unknown)
+        product=$(cat "$usb_node/product" 2>/dev/null || echo unknown)
+        serial=$(cat "$usb_node/serial" 2>/dev/null || echo unavailable)
+        driver_path=$(readlink -f "$dev/driver" 2>/dev/null || :)
+        driver=\${driver_path##*/}
+        [ -n "$driver" ] || driver=unknown
+        printf '%s usb=%s:%s product=%s serial=%s driver=%s path=%s\\n' \\
+            "\${hci##*/}" "$vid" "$pid" "$product" "$serial" "$driver" "$usb_node"
+    else
+        printf '%s is not mapped to a USB parent (possibly onboard Bluetooth)\\n' "\${hci##*/}"
+    fi
+done
+printf 'hci_controller_count=%s\\n' "$usb_hci_count"
+if command -v lsusb >/dev/null 2>&1; then
+    lsusb -t 2>&1 || :
+else
+    echo 'lsusb unavailable'
+fi
+echo
+
 echo '=== PIPEWIRE SESSION ==='
 # This tool does not elevate privileges or guess a root audio session.
 # Run as the PipeWire owning user, or set MT_AUDIO_USER explicitly.

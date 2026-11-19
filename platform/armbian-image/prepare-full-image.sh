@@ -26,7 +26,8 @@ git -C "$DEST" checkout --detach "$ARM_REF"
 # fresh DEST, so no previous image tree can be silently mixed with this image.
 for path in "$DEST/userpatches/medvetalkie-uwe5622-src" \
             "$DEST/userpatches/medvetalkie-uwe5622-scripts" \
-            "$DEST/extensions/medvetalkie-uwe5622.sh"; do
+            "$DEST/extensions/medvetalkie-uwe5622.sh" \
+            "$NETWORK" "$DOCS"; do
   [[ ! -e "$path" ]] || { echo "Refusing to overwrite prepared file: $path" >&2; exit 1; }
 done
 WORK=$(mktemp -d)
@@ -44,7 +45,10 @@ bash "$HERE/apply-source-profile.sh" "$WORK/uwe5622" "$WORK/openwrt" "$WIFI_PROF
 
 STAGED="$DEST/userpatches/medvetalkie-uwe5622-src"
 ASSETS="$DEST/userpatches/medvetalkie-uwe5622-scripts"
-mkdir -p "$STAGED" "$ASSETS"
+NETWORK="$DEST/userpatches/medvetalkie-network"
+DOCS="$DEST/userpatches/medvetalkie-docs"
+mkdir -p "$STAGED" "$ASSETS" "$NETWORK" "$DOCS/wifi-scripts" \
+  "$DOCS/bluetooth-patches" "$DOCS/wifi-patches"
 tar -C "$WORK/uwe5622" --exclude='./.git' -cf - . | tar -C "$STAGED" -xf -
 cp "$HERE/install-image-modules.sh" "$STAGED/install-image-modules.sh"
 cp "$PROJECT/platform/uwe5622/wifi/scripts/uwe5622-recover" "$ASSETS/"
@@ -52,11 +56,25 @@ cp "$PROJECT/platform/uwe5622/wifi/scripts/uwe5622-preflight" "$ASSETS/"
 cp "$PROJECT/platform/uwe5622/wifi/scripts/uwe5622-abi-check" "$ASSETS/"
 cp "$PROJECT/platform/uwe5622/wifi/scripts/medvetalkie-uwe5622-recover.service" "$ASSETS/"
 cp "$HERE/medvetalkie-uwe5622.sh" "$DEST/extensions/medvetalkie-uwe5622.sh"
-chmod +x "$STAGED/install-image-modules.sh"
+cp -a "$HERE/network/." "$NETWORK/"
+cp "$PROJECT/platform/bluetooth/diagnose-passive.sh" "$ASSETS/medvetalkie-bt-diagnose"
+cp -a "$PROJECT/platform/uwe5622/wifi/scripts/." "$DOCS/wifi-scripts/"
+cp -a "$PROJECT/platform/uwe5622/patches/." "$DOCS/bluetooth-patches/"
+cp -a "$PROJECT/platform/uwe5622/wifi/patches/." "$DOCS/wifi-patches/"
+cp "$PROJECT/platform/uwe5622/PATCH-SERIES.md" "$DOCS/"
+cp "$PROJECT/platform/uwe5622/HARDWARE-TRIAL.md" "$DOCS/"
+cp "$PROJECT/platform/uwe5622/wifi/PATCH-STATUS.md" "$DOCS/"
+cp "$PROJECT/platform/uwe5622/wifi/RECOVERY.md" "$DOCS/"
+cp "$PROJECT/platform/uwe5622/wifi/BUILD.md" "$DOCS/"
+chmod +x "$STAGED/install-image-modules.sh" "$ASSETS/medvetalkie-bt-diagnose" \
+  "$NETWORK/medvetalkie-network-check"
 {
   printf 'Armbian build: %s\nUWE5622 driver: %s\nOpenWrt patches: %s\n' "$ARM_REF" "$UWE_REF" "$OPENWRT_REF"
   printf 'Wi-Fi patch profile: %s\nBT transport patches: %s\n' "$WIFI_PROFILE" "$BT_PROFILE"
-  printf 'USB Bluetooth: stock btusb / BlueZ; onboard attach service explicitly opt-in\n'
+  printf 'USB Bluetooth: two external btusb controllers / BlueZ; onboard attach explicitly opt-in\n'
+  printf 'Networking: NetworkManager; Ethernet 192.168.11.1/24; Wi-Fi AP 192.168.12.1/24\n'
+  printf 'Wi-Fi AP: SSID MedveTalkie; WPA2 PSK configured in protected NetworkManager keyfile\n'
+  printf 'Preserved Wi-Fi/BT patch files and diagnostic/recovery scripts under /usr/share/doc/medvetalkie\n'
   printf 'Source: https://github.com/Medvedolog/medvetalkie\n'
 } > "$STAGED/BUILD-PROVENANCE.txt"
 echo "Prepared Armbian image build tree at $DEST"
@@ -67,6 +85,7 @@ if [[ "$BUILD_FLAG" == --build ]]; then
   cd "$DEST"
   ./compile.sh BOARD=orangepizero3 BRANCH=current RELEASE=trixie \
     BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no \
-    INSTALL_HEADERS=yes EXPERT=yes ENABLE_EXTENSIONS=medvetalkie-uwe5622
+    INSTALL_HEADERS=yes EXPERT=yes NETWORKING_STACK=network-manager \
+    ENABLE_EXTENSIONS=medvetalkie-uwe5622
   echo "Armbian output images: $DEST/output/images"
 fi

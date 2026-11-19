@@ -152,6 +152,21 @@ secrets. Self-hosted runners cannot be guaranteed to be as isolated as
 GitHub-hosted VMs.
 
 
+## First-boot networking and USB Bluetooth
+
+The full image explicitly selects Armbian `NETWORKING_STACK=network-manager` even though `BUILD_MINIMAL=yes` normally selects systemd-networkd. Two protected NetworkManager keyfiles are installed before first boot:
+
+| Interface | Address | Mode | DHCP |
+| --- | --- | --- | --- |
+| Built-in Ethernet `end0` | `192.168.11.1/24` | IPv4 shared, no bridge | NetworkManager/dnsmasq |
+| Built-in Wi-Fi `wlan0` | `192.168.12.1/24` | 5 GHz AP, channel 36, WPA2-PSK | NetworkManager/dnsmasq |
+
+Wi-Fi defaults: SSID `MedveTalkie`, password `Medve12345!`. The two interfaces are separate subnets, not a bridge. NetworkManager shared mode provides a separate DHCP/DNS scope on each and enables forwarding/NAT when an upstream route is available. Connect the Ethernet port to a directly attached client or an isolated switch; do not attach it to an existing LAN with another DHCP server.
+
+**Credential warning:** this repository is public, so the requested default Wi-Fi password is visible to anyone who can read the source. It is suitable only as a lab/bootstrap password; change it before deploying the image in a shared or untrusted environment. The keyfile is installed mode `0600`.
+
+Two external USB Bluetooth adapters are expected. The image loads `btusb`, enables BlueZ and unblocks Bluetooth radios. The built-in AW859A SDIO Bluetooth attach remains disabled unless `/etc/medvetalkie/enable-onboard-bluetooth` is explicitly created. The passive inventory utility `/usr/local/sbin/medvetalkie-bt-diagnose` maps HCI controllers to USB topology; `/usr/local/sbin/medvetalkie-network-check` reports the first-boot network state.
+
 ## Boot and safety
 
 - **First boot the image on a separate microSD card.** Retain the
@@ -168,7 +183,7 @@ GitHub-hosted VMs.
 - The `uwe5622-recover` script and systemd service are included, but
   neither the dangerous SDIO reset opt-in marker nor an automatic udev
   CP-assert trigger is installed by default.
-- No credentials or Wi-Fi AP passwords are embedded in the image.
+- The requested bootstrap AP credentials are embedded in protected NetworkManager keyfiles; rotate the default password before non-lab use.
 
 ### Enabling onboard Bluetooth attach for controlled testing
 
