@@ -5,8 +5,6 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT=$(realpath "$HERE/../..")
 DEST=$(realpath -m "${1:-$PWD/armbian-build-medvetalkie}")
-NETWORK="$DEST/userpatches/medvetalkie-network"
-DOCS="$DEST/userpatches/medvetalkie-docs"
 WIFI_PROFILE=${WIFI_PROFILE:-apsta}
 BT_PROFILE=${BT_PROFILE:-stock}
 ARM_REF=664d5fdf0efa5284dd85daae15101c5423d6de73
@@ -66,8 +64,10 @@ cp -a "$PROJECT/platform/uwe5622/tests/." "$DOCS/bluetooth-tests/"
 cp -a "$PROJECT/platform/uwe5622/wifi/tests/." "$DOCS/wifi-tests/"
 cp -a "$PROJECT/platform/uwe5622/patches/." "$DOCS/bluetooth-patches/"
 cp -a "$PROJECT/platform/uwe5622/wifi/patches/." "$DOCS/wifi-patches/"
+cp "$PROJECT/platform/uwe5622/README.md" "$DOCS/"
 cp "$PROJECT/platform/uwe5622/PATCH-SERIES.md" "$DOCS/"
 cp "$PROJECT/platform/uwe5622/HARDWARE-TRIAL.md" "$DOCS/"
+cp "$PROJECT/platform/uwe5622/wifi/README.md" "$DOCS/"
 cp "$PROJECT/platform/uwe5622/wifi/PATCH-STATUS.md" "$DOCS/"
 cp "$PROJECT/platform/uwe5622/wifi/RECOVERY.md" "$DOCS/"
 cp "$PROJECT/platform/uwe5622/wifi/BUILD.md" "$DOCS/"

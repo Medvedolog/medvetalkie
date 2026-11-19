@@ -18,7 +18,8 @@ and Module.symvers. The build fails if headers, modules or module lookup fail.
 - Armbian builder: `armbian/build` commit
   `664d5fdf0efa5284dd85daae15101c5423d6de73`.
 - Armbian settings: `BOARD=orangepizero3 BRANCH=current RELEASE=trixie
-  BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no`.
+  BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no
+  NETWORKING_STACK=network-manager`.
 - Existing Armbian `uwe5622-allwinner` extension is preserved; it includes
   the AW859A Wi-Fi/BT services, rfkill, BlueZ, SDIO BT module inclusion
   and the `hciattach_opi` helper.
@@ -47,6 +48,12 @@ and Module.symvers. The build fails if headers, modules or module lookup fail.
 The patched Bluetooth transport is still experimental; it **has not
 proven two-way HFP voice** on physical hardware. In particular, the absence
 of SCO RX in prior observations may originate below the TTY layer.
+
+## First-boot network defaults
+
+The generated image configures the built-in Ethernet interface `end0` as `192.168.11.1/24` and starts the Wi-Fi AP `MedveTalkie` on `wlan0` at `192.168.12.1/24` (5 GHz channel 36). Both are separate NetworkManager shared-mode networks with DHCP/DNS supplied by `dnsmasq-base`; no bridge is created. The bootstrap PSK is `Medve12345!` and is public in this repository, so rotate it for any non-lab deployment.
+
+Two external UGREEN USB Bluetooth adapters are supported through stock `btusb`; the image enables BlueZ, loads `btusb` and unblocks Bluetooth. The onboard AW859A Bluetooth attach remains opt-in. All reviewed Wi-Fi/BT patch sources, test scripts, diagnostics and recovery tools are staged into the image build tree; the operational recovery/preflight utilities and passive USB/HCI inventory are installed in the target image.
 
 ## Prepare build workspace (no image build)
 
