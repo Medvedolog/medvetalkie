@@ -49,6 +49,8 @@ jobs:
           grep -F 'NETWORKING_STACK=network-manager' platform/armbian-image/prepare-full-image.sh
           grep -F 'dnsmasq-base' platform/armbian-image/medvetalkie-uwe5622.sh
           sh platform/armbian-image/tests/check-network-profiles.sh
+          sh -n platform/armbian-image/network/medvetalkie-network-check
+          sh -n platform/bluetooth/diagnose-passive.sh
       - name: Checkout exact reviewed driver + OpenWrt patch revisions
         shell: bash
         run: |

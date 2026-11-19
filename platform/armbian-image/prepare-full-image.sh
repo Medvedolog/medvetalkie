@@ -5,6 +5,8 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT=$(realpath "$HERE/../..")
 DEST=$(realpath -m "${1:-$PWD/armbian-build-medvetalkie}")
+NETWORK="$DEST/userpatches/medvetalkie-network"
+DOCS="$DEST/userpatches/medvetalkie-docs"
 WIFI_PROFILE=${WIFI_PROFILE:-apsta}
 BT_PROFILE=${BT_PROFILE:-stock}
 ARM_REF=664d5fdf0efa5284dd85daae15101c5423d6de73
@@ -48,7 +50,8 @@ ASSETS="$DEST/userpatches/medvetalkie-uwe5622-scripts"
 NETWORK="$DEST/userpatches/medvetalkie-network"
 DOCS="$DEST/userpatches/medvetalkie-docs"
 mkdir -p "$STAGED" "$ASSETS" "$NETWORK" "$DOCS/wifi-scripts" \
-  "$DOCS/bluetooth-patches" "$DOCS/wifi-patches"
+  "$DOCS/bluetooth-patches" "$DOCS/wifi-patches" \
+  "$DOCS/bluetooth-tests" "$DOCS/wifi-tests"
 tar -C "$WORK/uwe5622" --exclude='./.git' -cf - . | tar -C "$STAGED" -xf -
 cp "$HERE/install-image-modules.sh" "$STAGED/install-image-modules.sh"
 cp "$PROJECT/platform/uwe5622/wifi/scripts/uwe5622-recover" "$ASSETS/"
@@ -59,6 +62,8 @@ cp "$HERE/medvetalkie-uwe5622.sh" "$DEST/extensions/medvetalkie-uwe5622.sh"
 cp -a "$HERE/network/." "$NETWORK/"
 cp "$PROJECT/platform/bluetooth/diagnose-passive.sh" "$ASSETS/medvetalkie-bt-diagnose"
 cp -a "$PROJECT/platform/uwe5622/wifi/scripts/." "$DOCS/wifi-scripts/"
+cp -a "$PROJECT/platform/uwe5622/tests/." "$DOCS/bluetooth-tests/"
+cp -a "$PROJECT/platform/uwe5622/wifi/tests/." "$DOCS/wifi-tests/"
 cp -a "$PROJECT/platform/uwe5622/patches/." "$DOCS/bluetooth-patches/"
 cp -a "$PROJECT/platform/uwe5622/wifi/patches/." "$DOCS/wifi-patches/"
 cp "$PROJECT/platform/uwe5622/PATCH-SERIES.md" "$DOCS/"
