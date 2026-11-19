@@ -30,10 +30,10 @@ printf '\\tpcf8563_driver.driver.name, pcf8563);\\n' > "$SOURCE_DIR/rtc-pcf8563.
 printf '%s\\n' \
   '+\\tpcf8563_driver.driver.name, pcf8563);' \
   '-\\tpcf8563_driver.driver.name, client);' > "$PATCH_DIR/$PATCH_NAME"
-printf '%s\\n' "$SERIES_ENTRY" 'patches.armbian/keep-this-unrelated.patch' > "$SERIES_FILE"
+printf '\\t%s\\n' "$SERIES_ENTRY" 'patches.armbian/keep-this-unrelated.patch' > "$SERIES_FILE"
 kernel_extra_create_patches__medvetalkie_rtc_patch_guard
 test ! -e "$PATCH_DIR/$PATCH_NAME"
-! grep -Fxq "$SERIES_ENTRY" "$SERIES_FILE"
+! awk -v target="$SERIES_ENTRY" '$1 == target { found=1 } END { exit !found }' "$SERIES_FILE"
 grep -Fxq 'patches.armbian/keep-this-unrelated.patch' "$SERIES_FILE"
 
 # Case 2: base kernel still needs the fix. Both patch and series entry remain.
@@ -41,9 +41,9 @@ printf '\\tpcf8563_driver.driver.name, client);\\n' > "$SOURCE_DIR/rtc-pcf8563.c
 printf '%s\\n' \
   '+\\tpcf8563_driver.driver.name, pcf8563);' \
   '-\\tpcf8563_driver.driver.name, client);' > "$PATCH_DIR/$PATCH_NAME"
-printf '%s\\n' "$SERIES_ENTRY" 'patches.armbian/keep-this-unrelated.patch' > "$SERIES_FILE"
+printf '\\t%s\\n' "$SERIES_ENTRY" 'patches.armbian/keep-this-unrelated.patch' > "$SERIES_FILE"
 kernel_extra_create_patches__medvetalkie_rtc_patch_guard
 test -s "$PATCH_DIR/$PATCH_NAME"
-grep -Fxq "$SERIES_ENTRY" "$SERIES_FILE"
+awk -v target="$SERIES_ENTRY" '$1 == target { found=1 } END { exit !found }' "$SERIES_FILE"
 
 echo "PASS: duplicate RTC patch and only its exact series entry are skipped when source already has the fix"

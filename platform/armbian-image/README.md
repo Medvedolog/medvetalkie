@@ -52,8 +52,9 @@ of SCO RX in prior observations may originate below the TTY layer.
 The pinned Armbian build includes an RTC patch whose fix is already present
 in the selected sunxi 6.18 kernel source. The MedveTalkie extension checks
 the exact source call and patch payload immediately before Armbian patching,
-then skips only that duplicate patch. If the source does not already contain
-the fix, the original Armbian patch is left in place.
+then removes only its exact entry from `series.conf` and the corresponding
+patch file. If the source does not already contain the fix, both the original
+Armbian patch and its series entry are left in place.
 
 ## First-boot network defaults
 
