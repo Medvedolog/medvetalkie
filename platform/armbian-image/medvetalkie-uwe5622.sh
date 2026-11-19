@@ -26,9 +26,9 @@ function kernel_extra_create_patches__medvetalkie_rtc_patch_guard() {
     if grep -Fq 'pcf8563_driver.driver.name, client);' "${source_file}"; then
       exit_with_error "MedveTalkie RTC guard: source contains both old and fixed dev_id calls"
     fi
-    grep -Fq '+	pcf8563_driver.driver.name, pcf8563);' "${patch_file}" || \
+    grep -Eq '^[+][[:space:]]*pcf8563_driver.driver.name, pcf8563\\);' "${patch_file}" || \
       exit_with_error "MedveTalkie RTC guard: unexpected RTC patch payload" "${patch_file}"
-    grep -Fq -- '-	pcf8563_driver.driver.name, client);' "${patch_file}" || \
+    grep -Eq '^-[[:space:]]*pcf8563_driver.driver.name, client\\);' "${patch_file}" || \
       exit_with_error "MedveTalkie RTC guard: expected old dev_id hunk missing" "${patch_file}"
 
     rm -- "${patch_file}"
