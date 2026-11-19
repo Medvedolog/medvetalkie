@@ -27,14 +27,13 @@ permissions:
 
 jobs:
   profile-check:
-    name: Source integration / Wi-Fi ${{ matrix.wifi }} / BT ${{ matrix.bt }}
+    name: Source integration / Wi-Fi ${{ matrix.wifi }} / USB BT stock
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     strategy:
       fail-fast: false
       matrix:
         wifi: [p0, apsta]
-        bt: [stock, patched]
     steps:
       - uses: actions/checkout@v4
       - name: Check shell grammar and integration invariants
@@ -64,9 +63,7 @@ jobs:
           git -C openwrt checkout -q --detach 29b6faf6b08a2b62097e509eb0fa62720ab48996
       - name: Apply entire combined source profile
         shell: bash
-        env:
-          MEDVETALKIE_BT_PATCHES: ${{ matrix.bt == 'patched' && 'yes' || 'no' }}
-        run: |
+                run: |
           set -euo pipefail
           bash platform/armbian-image/apply-source-profile.sh uwe5622 openwrt '${{ matrix.wifi }}'
           git -C uwe5622 diff --check
@@ -86,7 +83,7 @@ jobs:
         shell: bash
         env:
           WIFI_PROFILE: apsta
-          BT_PROFILE: patched
+          BT_PROFILE: stock
         run: |
           set -euo pipefail
           bash platform/armbian-image/prepare-full-image.sh "$RUNNER_TEMP/armbian-medvetalkie"
@@ -119,7 +116,7 @@ jobs:
           bash platform/armbian-image/home-runner-preflight.sh "$RUNNER_TEMP"
 
   image:
-    name: Native ARM64 full Armbian OS / BT ${{ matrix.bt }}
+    name: Native ARM64 full Armbian OS / USB BT stock
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[armbian-home-build]') || contains(github.event.head_commit.message, '[armbian-hosted-build]')))
     needs: [profile-check, staging-smoke]
     runs-on: ${{ ((github.event_name == 'push' && contains(github.event.head_commit.message, '[armbian-hosted-build]')) || inputs.execution == 'hosted') && 'ubuntu-24.04-arm' || fromJSON('["self-hosted","Linux","X64","armbian-image"]') }}
@@ -128,7 +125,6 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        bt: [stock, patched]
     steps:
       - uses: actions/checkout@v4
       - name: Verify selected builder resources and Docker
@@ -140,19 +136,19 @@ jobs:
         shell: bash
         env:
           WIFI_PROFILE: ${{ inputs.wifi_profile || 'apsta' }}
-          BT_PROFILE: ${{ matrix.bt }}
+          BT_PROFILE: stock
         run: |
           set -euo pipefail
-          bash platform/armbian-image/prepare-full-image.sh "$RUNNER_TEMP/armbian-build-medvetalkie-${{ matrix.bt }}" --build
-          find "$RUNNER_TEMP/armbian-build-medvetalkie-${{ matrix.bt }}/output/images" -maxdepth 2 -type f -printf '%p %s bytes\n'
+          bash platform/armbian-image/prepare-full-image.sh "$RUNNER_TEMP/armbian-build-medvetalkie-stock" --build
+          find "$RUNNER_TEMP/armbian-build-medvetalkie-stock/output/images" -maxdepth 2 -type f -printf '%p %s bytes\n'
       - name: Upload generated images and checksums
         uses: actions/upload-artifact@v4
         with:
-          name: medvetalkie-armbian-orangepizero3-${{ inputs.wifi_profile || 'apsta' }}-bt-${{ matrix.bt }}-UNTESTED
+          name: medvetalkie-armbian-orangepizero3-${{ inputs.wifi_profile || 'apsta' }}-bt-stock-UNTESTED
           path: |
-            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.img*
-            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.sha
-            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.sha256
-            ${{ runner.temp }}/armbian-build-medvetalkie-${{ matrix.bt }}/output/images/*.txt
+            ${{ runner.temp }}/armbian-build-medvetalkie-stock/output/images/*.img*
+            ${{ runner.temp }}/armbian-build-medvetalkie-stock/output/images/*.sha
+            ${{ runner.temp }}/armbian-build-medvetalkie-stock/output/images/*.sha256
+            ${{ runner.temp }}/armbian-build-medvetalkie-stock/output/images/*.txt
           if-no-files-found: error
           retention-days: 7
