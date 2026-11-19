@@ -11,6 +11,32 @@ function extension_prepare_config__medvetalkie_network() {
   add_packages_to_image dnsmasq-base
 }
 
+# Armbian's pinned sunxi 6.18 tree already contains this RTC fix. Its
+# patch file is still shipped in the same patch directory, and the Python
+# patcher correctly rejects a reverse/already-applied hunk. Skip ONLY that
+# exact patch, and ONLY after validating both the base source and patch payload.
+function kernel_extra_create_patches__medvetalkie_rtc_patch_guard() {
+  local patch_file="${SRC}/patch/kernel/${KERNELPATCHDIR}/patches.armbian/drv-rtc-pcf8563-pass-driver-data-to-irq-handler.patch"
+  local source_file="${kernel_work_dir}/drivers/rtc/rtc-pcf8563.c"
+
+  [[ -f "${patch_file}" ]] || return 0
+  [[ -s "${source_file}" ]] || exit_with_error "MedveTalkie RTC guard: kernel source file missing" "${source_file}"
+
+  if grep -Fq 'pcf8563_driver.driver.name, pcf8563);' "${source_file}"; then
+    if grep -Fq 'pcf8563_driver.driver.name, client);' "${source_file}"; then
+      exit_with_error "MedveTalkie RTC guard: source contains both old and fixed dev_id calls"
+    fi
+    grep -Fq '+	pcf8563_driver.driver.name, pcf8563);' "${patch_file}" || \
+      exit_with_error "MedveTalkie RTC guard: unexpected RTC patch payload" "${patch_file}"
+    grep -Fq -- '-	pcf8563_driver.driver.name, client);' "${patch_file}" || \
+      exit_with_error "MedveTalkie RTC guard: expected old dev_id hunk missing" "${patch_file}"
+
+    rm -- "${patch_file}"
+    display_alert "MedveTalkie: skipped duplicate upstream RTC fix" "verified pcf8563 dev_id already correct" "info"
+  else
+    display_alert "MedveTalkie: RTC fix not present in base source" "keeping Armbian patch enabled" "info"
+  fi
+}
 # Armbian built-in uwe5622-allwinner extension is retained for firmware,
 # BlueZ, rfkill, hciattach_opi and the board's boot/DTB configuration.
 

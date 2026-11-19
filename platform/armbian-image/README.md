@@ -49,6 +49,12 @@ The patched Bluetooth transport is still experimental; it **has not
 proven two-way HFP voice** on physical hardware. In particular, the absence
 of SCO RX in prior observations may originate below the TTY layer.
 
+The pinned Armbian build includes an RTC patch whose fix is already present
+in the selected sunxi 6.18 kernel source. The MedveTalkie extension checks
+the exact source call and patch payload immediately before Armbian patching,
+then skips only that duplicate patch. If the source does not already contain
+the fix, the original Armbian patch is left in place.
+
 ## First-boot network defaults
 
 The generated image configures the built-in Ethernet interface `end0` as `192.168.11.1/24` and starts the Wi-Fi AP `MedveTalkie` on `wlan0` at `192.168.12.1/24` (5 GHz channel 36). Both are separate NetworkManager shared-mode networks with DHCP/DNS supplied by `dnsmasq-base`; no bridge is created. The bootstrap PSK is `Medve12345!` and is public in this repository, so rotate it for any non-lab deployment.
