@@ -221,7 +221,12 @@ static int ipc_server(const char *path)
         return 1;
     }
     umask(mask);
-    if (lstat(path, &bound) != 0 || listen(server, 16) != 0) {
+    if (lstat(path, &bound) != 0) {
+        close(server);
+        return 1;
+    }
+    /* Restrict the filesystem socket explicitly; umask(0077) alone gives 0700. */
+    if (chmod(path, 0600) != 0 || listen(server, 16) != 0) {
         rc = 1;
         goto cleanup;
     }
