@@ -3,6 +3,7 @@
  */
 #include "medvetalkie/ipc.h"
 #include <civetweb.h>
+#include <json-c/json.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -57,7 +58,37 @@ static int json_handler(struct mg_connection *conn, void *user_data)
     if (mt_ipc_exchange(ipc_path, request, response, sizeof(response)) < 0)
         return send_response(conn, 503, "Service Unavailable", "application/json",
                              "{\"error\":\"core_unavailable\"}\n");
-    return send_response(conn, 200, "OK", "application/json", response);
+    /* Distinguish an unavailable BlueZ/backend from a successful zero result. */
+    json_object *object = json_tokener_parse(response);
+    json_object *type = NULL, *error = NULL, *error_code = NULL;
+    int status = 200;
+    const char *reason = "OK";
+    if (!object || !json_object_is_type(object, json_type_object) ||
+        !json_object_object_get_ex(object, "type", &type) ||
+        !json_object_is_type(type, json_type_string)) {
+        if (object) json_object_put(object);
+        return send_response(conn, 502, "Bad Gateway", "application/json",
+                             "{\"error\":\"invalid_core_response\"}\n");
+    }
+    if (strcmp(json_object_get_string(type), "error") == 0) {
+        status = 502;
+        reason = "Bad Gateway";
+        if (json_object_object_get_ex(object, "error", &error) &&
+            json_object_is_type(error, json_type_object) &&
+            json_object_object_get_ex(error, "code", &error_code) &&
+            json_object_is_type(error_code, json_type_string)) {
+            const char *code = json_object_get_string(error_code);
+            if (strcmp(code, "NOT_READY") == 0) {
+                status = 503;
+                reason = "Service Unavailable";
+            } else if (strcmp(code, "NOT_SUPPORTED") == 0) {
+                status = 404;
+                reason = "Not Found";
+            }
+        }
+    }
+    json_object_put(object);
+    return send_response(conn, status, reason, "application/json", response);
 }
 
 static int index_handler(struct mg_connection *conn, void *unused)
