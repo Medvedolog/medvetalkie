@@ -97,13 +97,19 @@ input-to-photon latency. The animation now targets up to 25 FPS, subject to SPI
 throughput. Initial display setup still runs at 1 MHz before selecting the
 requested animation speed.
 
-Try `bash platform/display/medvetalkie-screensaver.sh --spi-mhz 4`, then 8 MHz
-only after checking for correct colours and stable output. `--fps N` selects a
+The operator subsequently confirmed **24.3–25 FPS without visible artifacts**
+with the optimized screensaver at the requested **4 MHz** on the current panel
+and wiring (2026-11-24). This reaches the configured 25 FPS ceiling; keep 4 MHz
+for this bench. This observation does not establish long-duration stability or
+measure panel latency. 8 MHz and higher have not been tested on this bench.
+
+Use `bash platform/display/medvetalkie-screensaver.sh --spi-mhz 4` for the
+confirmed fast mode. `--fps N` selects a
 1–60 FPS ceiling. `MEDVETALKIE_SPI_MHZ=4` and `MEDVETALKIE_FPS=25` provide the
 same settings through cron's environment, without changing its command lines.
 CLI options override environment settings. SPI accepts integer MHz values 1–16;
-faster modes are not yet confirmed on the operator's panel/wires. Return to 1
-MHz if output is corrupted. Changing speed is per process; no overlay or boot
+4 MHz is visually confirmed on the current bench; higher settings remain
+experimental. Return to 1 MHz if output is corrupted. Changing speed is per process; no overlay or boot
 configuration change is required. The displayed MHz is the requested setting,
 not a measurement of the physical clock. The original GIF itself has 280 ms
 frames; the spinner, throws, sweep and clock update independently.
