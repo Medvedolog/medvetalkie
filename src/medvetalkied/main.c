@@ -221,7 +221,7 @@ static int ipc_server(const char *path)
         return 1;
     }
     umask(mask);
-    if (fstat(server, &bound) != 0 || listen(server, 16) != 0) {
+    if (lstat(path, &bound) != 0 || listen(server, 16) != 0) {
         rc = 1;
         goto cleanup;
     }
