@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory(prefix='medvetalkie-saver-check-') as temp:
     assert (dims, depth) == (status_dims, status_depth) == (b'320 240', b'255')
     assert normal_pixels != standby_pixels, 'dashboard must differ from Bjorni animation'
     assert standby_pixels.count(b'\x00\x00\x00') > 1000, 'status background'
-    assert standby_pixels.count(bytes((23, 47, 49))) > 100, 'dashboard green footer'
+    assert standby_pixels.count(bytes((16, 44, 49))) > 100, 'dashboard green footer'
     assert standby_pixels.count(bytes((100, 24, 24))) == 0, 'no red warning in standby'
 
     status.write_text(
