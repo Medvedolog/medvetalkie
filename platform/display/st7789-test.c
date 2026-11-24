@@ -39,13 +39,36 @@ static void pause_ms(long ms)
         if (errno != EINTR) die("nanosleep");
 }
 
-/* Resolve names on the actual chip, rather than assuming gpiochip0/offsets. */
+static int is_orangepi_zero3(void)
+{
+    FILE *file = fopen("/proc/device-tree/compatible", "rb");
+    if (!file) return 0;
+    char data[512];
+    size_t length = fread(data, 1, sizeof(data), file);
+    int valid = !ferror(file) && length < sizeof(data);
+    fclose(file);
+    if (!valid) return 0;
+    for (size_t pos = 0; pos < length; ) {
+        size_t part = strnlen(data + pos, length - pos);
+        if (part == length - pos) return 0; /* malformed DT string list */
+        if (strcmp(data + pos, "xunlong,orangepi-zero3") == 0) return 1;
+        pos += part + 1;
+    }
+    return 0;
+}
+
+/* Discover the chip; its /dev/gpiochipN index is not stable across boots.
+ * Some Armbian DTs omit GPIO line names. On a verified Orange Pi Zero 3,
+ * the H616/H618 main PIO uses bank C base 64: PC5=69, PC6=70.
+ * Never apply these offsets to the separate R_PIO controller or another SBC.
+ */
 static void request_controls(void)
 {
     glob_t chips = {0};
     int selected = -1;
     unsigned int offsets[2] = {0};
     char selected_path[256] = {0};
+    int known_board = is_orangepi_zero3(), selected_by_offsets = 0;
     if (glob("/dev/gpiochip*", 0, NULL, &chips) != 0) {
         fprintf(stderr, "No /dev/gpiochip* devices found\n");
         exit(EXIT_FAILURE);
@@ -56,7 +79,8 @@ static void request_controls(void)
         struct gpiochip_info chip = {0};
         if (ioctl(fd, GPIO_GET_CHIPINFO_IOCTL, &chip) < 0)
             die("GPIO_GET_CHIPINFO_IOCTL");
-        unsigned int found = 0, candidate[2] = {0};
+        unsigned int found = 0, candidate[2] = {0}, unnamed = 0;
+        int by_offsets = 0;
         for (unsigned int j = 0; j < chip.lines; ++j) {
             struct gpio_v2_line_info info = {.offset = j};
             if (ioctl(fd, GPIO_V2_GET_LINEINFO_IOCTL, &info) < 0)
@@ -67,14 +91,23 @@ static void request_controls(void)
             if (strcmp(info.name, "PC6") == 0) {
                 found |= 2; candidate[1] = j;
             }
+            if (j == 69 && info.name[0] == '\0') unnamed |= 1;
+            if (j == 70 && info.name[0] == '\0') unnamed |= 2;
+        }
+        if (found == 0 && unnamed == 3 && known_board &&
+            strcmp(chip.label, "300b000.pinctrl") == 0 && chip.lines == 288) {
+            candidate[0] = 69; candidate[1] = 70;
+            found = 3;
+            by_offsets = 1;
         }
         if (found == 3) {
             if (selected >= 0) {
                 close(fd); close(selected); globfree(&chips);
-                fprintf(stderr, "Ambiguous PC5/PC6 names on multiple chips\n");
+                fprintf(stderr, "Ambiguous PC5/PC6 mapping on multiple chips\n");
                 exit(EXIT_FAILURE);
             }
             selected = fd;
+            selected_by_offsets = by_offsets;
             memcpy(offsets, candidate, sizeof(offsets));
             snprintf(selected_path, sizeof(selected_path), "%s", chips.gl_pathv[i]);
         } else {
@@ -83,7 +116,8 @@ static void request_controls(void)
     }
     globfree(&chips);
     if (selected < 0) {
-        fprintf(stderr, "Named GPIO lines PC5 and PC6 not found; no pins requested\n");
+        fprintf(stderr, "PC5/PC6 not found by name or verified Orange Pi Zero 3 "
+                "mapping; no pins requested. Check gpiodetect and gpioinfo.\n");
         exit(EXIT_FAILURE);
     }
     struct gpio_v2_line_request request = {0};
@@ -104,8 +138,9 @@ static void request_controls(void)
     }
     close(selected);
     lines_fd = request.fd;
-    printf("GPIO %s: DC=PC5 offset %u; RESET=PC6 offset %u\n",
-           selected_path, offsets[0], offsets[1]);
+    printf("GPIO %s: DC=PC5 offset %u; RESET=PC6 offset %u (%s)\n",
+           selected_path, offsets[0], offsets[1],
+           selected_by_offsets ? "verified H618 offsets; unnamed lines" : "line names");
 }
 
 static void set_line(unsigned int index, int high)
