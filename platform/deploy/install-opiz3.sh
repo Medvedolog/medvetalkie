@@ -53,7 +53,7 @@ while (($#)); do
  --dry-run) MODE=dry-run;;
  --apply) MODE=apply;;
  --simulate) (($# >= 2)) || die "Missing --simulate path"; MODE=simulate; SIMROOT="$2"; shift;;
- --rollback) ROLLBACK=1;;
+ --rollback) ROLLBACK=1; if [[ "$MODE" == dry-run ]]; then MODE=apply; fi;;
  --proxy) (($# >= 2)) || die "Missing --proxy URL"; PROXY="$2"; USE_PROXY=1; shift;;
  --no-proxy) USE_PROXY=0;;
  --enable-display) DISPLAY=1;;
@@ -103,11 +103,11 @@ if [[ "$MODE" == apply ]]; then
  command -v systemctl >/dev/null || die "systemd missing"
  if ((DISPLAY && !ROLLBACK)); then
    [[ -c /dev/spidev1.0 ]] || die "/dev/spidev1.0 not available"
-   command -v fuser >/dev/null || die "Install psmisc (fuser) to check exclusive SPI ownership"
-   if ! systemctl is-active --quiet medvetalkie-display.service; then
-     if fuser -s /dev/spidev1.0; then
-       die "SPI occupied by old renderer: stop it yourself, no processes will be killed"
-     fi
+   # The psmisc package may only be installed in the package stage below.
+   if command -v fuser >/dev/null &&
+      ! systemctl is-active --quiet medvetalkie-display.service &&
+      fuser -s /dev/spidev1.0; then
+     die "SPI occupied by old renderer: stop it yourself, no processes will be killed"
    fi
  fi
 fi
@@ -164,6 +164,13 @@ if [[ "$MODE" == apply && "$SKIP_APT" == 0 ]]; then
    libdbus-1-dev libcivetweb-dev python3 curl ca-certificates git psmisc
 fi
 
+if [[ "$MODE" == apply && "$DISPLAY" == 1 ]]; then
+ command -v fuser >/dev/null || die "fuser missing (install psmisc)"
+ if ! systemctl is-active --quiet medvetalkie-display.service &&
+    fuser -s /dev/spidev1.0; then
+   die "SPI occupied by old renderer; refusing to interfere with it"
+ fi
+fi
 command -v cmake >/dev/null || die "cmake missing"
 command -v python3 >/dev/null || die "python3 missing"
 command -v cc >/dev/null || die "C compiler missing"
