@@ -15,6 +15,8 @@ endif()
 
 find_package(Threads REQUIRED)
 find_package(SQLite3 REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(DBUS1 REQUIRED IMPORTED_TARGET dbus-1)
 find_path(JSONC_INCLUDE_DIR NAMES json-c/json.h)
 find_library(JSONC_LIBRARY NAMES json-c)
 if(NOT JSONC_INCLUDE_DIR OR NOT JSONC_LIBRARY)
@@ -28,9 +30,10 @@ endforeach()
 target_sources(medvetalkied PRIVATE
   src/common/settings.c
   src/medvetalkied/settings_api.c
-  src/medvetalkied/bt_inventory.c)
+  src/medvetalkied/bt_inventory.c
+  src/medvetalkied/bt_bluez.c)
 target_include_directories(medvetalkied PRIVATE ${JSONC_INCLUDE_DIR})
-target_link_libraries(medvetalkied PRIVATE ${JSONC_LIBRARY} SQLite::SQLite3 Threads::Threads)
+target_link_libraries(medvetalkied PRIVATE ${JSONC_LIBRARY} SQLite::SQLite3 Threads::Threads PkgConfig::DBUS1)
 # Explicit local startup bridge to the independently tested Bjorni script.
 # Does not install/autostart the hardware renderer.
 add_executable(medvetalkie-display-runner src/medvetalkie-display-runner/main.c)
@@ -56,6 +59,13 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_bt_inventory.py
             $<TARGET_FILE:medvetalkied>)
   set_tests_properties(bt_inventory_sysfs PROPERTIES TIMEOUT 15)
+  add_executable(test_bluez_parser tests/test_bluez_parser.c
+    src/medvetalkied/bt_bluez.c)
+  target_include_directories(test_bluez_parser PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/medvetalkied ${JSONC_INCLUDE_DIR})
+  target_link_libraries(test_bluez_parser PRIVATE PkgConfig::DBUS1 ${JSONC_LIBRARY})
+  add_test(NAME bluez_dbus_parser COMMAND test_bluez_parser)
+  set_tests_properties(bluez_dbus_parser PROPERTIES TIMEOUT 10)
   add_test(NAME display_runner_bridge
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_display_runner.py
             $<TARGET_FILE:medvetalkied> $<TARGET_FILE:medvetalkie-display-runner>)
