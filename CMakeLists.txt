@@ -14,6 +14,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 find_package(Threads REQUIRED)
+find_package(SQLite3 REQUIRED)
 find_path(JSONC_INCLUDE_DIR NAMES json-c/json.h)
 find_library(JSONC_LIBRARY NAMES json-c)
 if(NOT JSONC_INCLUDE_DIR OR NOT JSONC_LIBRARY)
@@ -24,8 +25,11 @@ foreach(service IN ITEMS medvetalkied medvetalkie-bt medvetalkie-ui)
   add_executable(${service} src/${service}/main.c)
   target_link_libraries(${service} PRIVATE medvetalkie_common)
 endforeach()
+target_sources(medvetalkied PRIVATE
+  src/common/settings.c
+  src/medvetalkied/settings_api.c)
 target_include_directories(medvetalkied PRIVATE ${JSONC_INCLUDE_DIR})
-target_link_libraries(medvetalkied PRIVATE ${JSONC_LIBRARY} Threads::Threads)
+target_link_libraries(medvetalkied PRIVATE ${JSONC_LIBRARY} SQLite::SQLite3 Threads::Threads)
 
 include(CTest)
 if(BUILD_TESTING)
@@ -37,6 +41,10 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_core_ipc.py
             $<TARGET_FILE:medvetalkied>)
   set_tests_properties(core_ipc_protocol PROPERTIES TIMEOUT 15)
+  add_test(NAME settings_sqlite
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_settings_api.py
+            $<TARGET_FILE:medvetalkied>)
+  set_tests_properties(settings_sqlite PROPERTIES TIMEOUT 25)
 endif()
 
 # Read-only diagnostic binary; deliberately does not bind USB device roles.
