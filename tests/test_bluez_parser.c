@@ -1,5 +1,9 @@
 /* Synthetic BlueZ ObjectManager DBus-message fixture. No radio/bus needed. */
 #include "bt_bluez.h"
+/* Unit test assertions MUST execute in -DCMAKE_BUILD_TYPE=Release builds. */
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <assert.h>
 #include <dbus/dbus.h>
 #include <json-c/json.h>
