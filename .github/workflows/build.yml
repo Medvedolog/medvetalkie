@@ -18,3 +18,5 @@ jobs:
         run: ctest --test-dir build --output-on-failure
       - name: ST7789 Bjorni and screen statuses
         run: python3 platform/display/screensaver/test-screensaver.py
+      - name: In-place installer simulated filesystem and mixed-proxy validation
+        run: python3 tests/test_deploy_installer.py
