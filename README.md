@@ -49,13 +49,13 @@ in [docs/IPC.md](docs/IPC.md), not the finished settings interface.
 For a development machine with dependencies installed:
 
 ```sh
-sudo apt-get install -y build-essential cmake libjson-c-dev libcivetweb-dev curl
+sudo apt-get install -y build-essential cmake libjson-c-dev libsqlite3-dev libcivetweb-dev curl
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 2
 ctest --test-dir build --output-on-failure
 
 mkdir -p /tmp/medvetalkie-api
-./build/medvetalkied --ipc-socket /tmp/medvetalkie-api/core.sock
+./build/medvetalkied --ipc-socket /tmp/medvetalkie-api/core.sock --db-path /tmp/medvetalkie-api/settings.db
 # In another terminal, under the same user:
 ./build/medvetalkie-web --ipc-socket /tmp/medvetalkie-api/core.sock
 ```
