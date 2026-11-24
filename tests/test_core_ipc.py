@@ -41,7 +41,11 @@ def denied(path, data, declared_length=None):
         sock.settimeout(2)
         sock.connect(str(path))
         sock.sendall(struct.pack("!I", declared_length or len(data)) + data)
-        assert sock.recv(1) == b"", "invalid frame must be dropped"
+        try:
+            assert sock.recv(1) == b"", "invalid frame must be dropped"
+        except ConnectionResetError:
+            # Linux may reset AF_UNIX when peer closes with unread rejected bytes.
+            pass
 
 
 def main(binary):
