@@ -1,6 +1,10 @@
 # Control IPC and state model — draft protocol v1
 
-**Design proposal; not implemented by the initial C skeleton.**
+**Implementation status (2026-11-24):** read-only Core API Alpha is implemented
+in `medvetalkied`, with a separate loopback-only `medvetalkie-web`
+adapter. The full command engine, persistent state, events, SQLite, Android
+BLE and authenticated network UI remain planned. Alpha is not a usable HFP
+intercom and must not be exposed to an untrusted network.
 
 ## Transport
 
@@ -68,3 +72,43 @@ Operations should not run concurrently when they mutate the same controller or a
 Planned `GET /api/v1/state`, `GET/PATCH /api/v1/settings`, `POST /api/v1/mode`, `POST /api/v1/wifi/ap`, `GET /api/v1/diagnostics`, `WS /api/v1/events`. These are not live endpoints yet.
 
 Authenticated sessions required even when the AP is private. CSRF protection for mutable HTTP calls, input validation, operation audit trail without storing PSKs/bond keys. WebSockets must be authenticated and rate-limited. All local/remote clients share one command policy.
+
+
+## Implemented API Alpha (read-only)
+
+The core starts explicitly using `medvetalkied --ipc-socket /run/medvetalkie/control.sock`.
+The parent directory must be created by the operator or a future systemd
+`RuntimeDirectory`. The server deliberately refuses to remove stale socket
+paths on startup. The socket is `0600` and requires matching `SO_PEERCRED`
+UID; run `medvetalkie-web` under the same trusted UID during Alpha.
+Dedicated groups, privilege separation and per-action policies are prerequisites
+before enabling remote writes or separate service accounts.
+
+The first frame from a client must be a versioned `query`. The bounded
+client library `src/common/ipc.c` implements the network-order 4-byte
+length, 64-KiB maximum, complete reads/writes, 1.5-second client timeouts,
+and frame rejection on truncation, embedded NUL or oversize length.
+The server processes at most eight concurrent peer connections, with a
+500-ms I/O timeout per peer; this is **not** an event streaming API yet.
+
+| Query action | Reply | Semantics |
+| --- | --- | --- |
+| `health` or `system.health` | `type=health` | Core IPC health only, no physical hardware assertion |
+| `system.status` | `type=snapshot` | Explicit `UNKNOWN` / `NOT_READY` placeholders, revision 0 |
+| `system.capabilities` | `type=capabilities` | Honest implemented / unimplemented feature flags |
+
+Any other query returns `NOT_SUPPORTED`. Every `command` with a syntactically
+valid request ID returns `rejected` / `NOT_READY` **without changing state**.
+Malformed requests return `BAD_REQUEST` and unknown protocol versions return
+`UNSUPPORTED_VERSION`. Oversize or truncated frames are dropped.
+
+`medvetalkie-web --ipc-socket /run/medvetalkie/control.sock` exposes only
+`127.0.0.1:8765`: `/` (read-only status page), `GET /api/v1/health`,
+`GET /api/v1/status` and `GET /api/v1/capabilities`. It returns HTTP 503
+when core is unreachable and HTTP 405 for non-GET requests. No login,
+remote listener, write API, BLE gateway or user-configurable settings exist yet.
+
+The planned mutation, operation ID, authenticated HTTP, SQLite, subscriptions,
+WebSocket and BLE behaviors described earlier in this document are **not yet
+implemented**. Never infer HFP readiness or active audio from a healthy core,
+two enumerated USB adapters or a running web page.
