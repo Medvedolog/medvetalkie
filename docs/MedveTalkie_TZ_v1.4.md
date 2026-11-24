@@ -501,6 +501,19 @@ P0: safe inventory of hardware, stable logical bindings, lifecycle/reconnect rep
 
 ## 27. Единый API управления MedveTalkie (обязательное дополнение от 24.11.2026)
 
+**Дополнение (BlueZ D-Bus Alpha, 24.11.2026):** реализована пассивная
+интеграция с `org.bluez` через `GetManagedObjects` и локальный
+`bt.bluez` / `GET /api/v1/bt/bluez`. В API раздельно отображаются
+`Adapter1.Powered/Discovering` и `Device1.Paired/Connected`; по отсутствию
+свойств возвращается `null`, а по ошибке системного D-Bus или BlueZ —
+`NOT_READY`. **Connected/Paired не означают HFP_READY**: готовность
+SCO/eSCO и двустороннего звука не утверждается. Управляющих команд
+Bluetooth пока нет; чтение BlueZ должно быть проверено на реальных
+UGREEN ATS2851, а также испытано при перезапусках `bluetoothd`.
+Веб-панель пока только на loopback и без аутентификации, выпуск в LAN запрещён.
+
+
+
 **Дополнение к статусу на 24.11.2026 (BT Inventory / Display Runner Alpha):**
 реализован пассивный `bt.controllers` на основе Linux sysfs с сопоставлением
 HCI-контроллеров и физических USB-портов, включая одинаковые UGREEN ATS2851.
