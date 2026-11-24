@@ -71,16 +71,18 @@ static int index_handler(struct mg_connection *conn, void *unused)
         "pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#202c3a;"
         "padding:1em;border-radius:9px}small{color:#b6c6d3}</style>"
         "<h1>MedveTalkie</h1><p>Web Alpha · только просмотр</p>"
-        "<small>Bluetooth HFP, настройки и Android BLE ещё не реализованы.</small>"
+        "<small>Bluetooth HFP, применение настроек и Android BLE ещё не реализованы.</small>"
         "<h2>Core status</h2><pre id=\"status\">Загрузка…</pre>"
         "<h2>Capabilities</h2><pre id=\"caps\">Загрузка…</pre>"
+        "<h2>Сохранённые настройки</h2><pre id=\"settings\">Загрузка…</pre>"
         "<script>async function show(id,url){try{const r=await fetch(url,"
         "{cache:'no-store'});const d=await r.json();"
         "document.getElementById(id).textContent=JSON.stringify(d,null,2)"
         "+(r.ok?'':'\\nHTTP '+r.status)}catch(e){"
         "document.getElementById(id).textContent='Нет связи с core';}}"
         "show('status','/api/v1/status');"
-        "show('caps','/api/v1/capabilities');</script></html>";
+        "show('caps','/api/v1/capabilities');"
+        "show('settings','/api/v1/settings');</script></html>";
     (void)unused;
     if (!method_is_get(conn))
         return send_response(conn, 405, "Method Not Allowed", "application/json",
@@ -124,6 +126,10 @@ int main(int argc, char **argv)
     mg_set_request_handler(context, "/api/v1/status", json_handler, (void *)"system.status");
     mg_set_request_handler(context, "/api/v1/capabilities",
                            json_handler, (void *)"system.capabilities");
+    mg_set_request_handler(context, "/api/v1/settings",
+                           json_handler, (void *)"settings.get");
+    mg_set_request_handler(context, "/api/v1/display",
+                           json_handler, (void *)"display.status");
     while (!stop_requested) sleep(1);
     mg_stop(context);
     return 0;
