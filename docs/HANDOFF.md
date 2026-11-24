@@ -2,14 +2,14 @@
 
 **As of:** 2026-11-24  
 **Canonical handoff:** `docs/HANDOFF.md` on `work/uwe5622-wifi-armbian`.  
-**Status:** experimental; software CI is passing, **integrated deployment and full-duplex HFP have NOT been proven**.
+**Status:** Core/Web/UI source code now integrated into the Armbian work branch (2026-11-24). Joint CI gate must pass; **integrated image deployment and full-duplex HFP have NOT been proven**.
 
 ## 1. Working agreement — do not create branches for each iteration
 
 - **Primary hardware/image/display integration:** `work/uwe5622-wifi-armbian` ([Draft PR #1](https://github.com/Medvedolog/medvetalkie/pull/1)).
-- **Core API / Web Alpha / SQLite / BlueZ / display status producer:** `feature/web-alpha-usb-diagnostics` ([Draft PR #2](https://github.com/Medvedolog/medvetalkie/pull/2)); target for integration is the existing hardware work branch.
+- **Core API / Web Alpha / SQLite / BlueZ / display status producer:** copied and reconciled into `work/uwe5622-wifi-armbian` with the ST7789 renderer. The historic `feature/web-alpha-usb-diagnostics` ([PR #2](https://github.com/Medvedolog/medvetalkie/pull/2)) must not receive further implementation commits.
 - `main` stays untouched until integrated tests and agreed release gates pass. `experimental/armbian-wifi-backport` is retained historical experimentation, **not** a branch for new display/API work.
-- **Do not spawn a branch per iteration, test or subsystem.** Continue on these existing branches; merge and close redundant branches when the integration gate is satisfied. PR #2 is currently **not mergeable** against the hardware branch and needs an intentional conflict resolution. Do not silently force-update or overwrite either branch.
+- **Do not spawn a branch per iteration, test or subsystem.** All new MedveTalkie work goes into `work/uwe5622-wifi-armbian` until the release gate. PR #2 was not automatically mergeable; files were deliberately ported while preserving Armbian-specific image and SPI code. Close PR #2 as superseded by this integration after green combined CI; avoid trying to auto-merge duplicate history.
 - **Update this handoff with every substantive change**, including commit SHA, affected components, CI run, regression evidence, remaining risks and exact next action. PR descriptions/README are supporting material, not substitutes.
 
 ## 2. Hardware actually observed on the physical board
@@ -34,10 +34,10 @@
 | ST7789 status + Bjorni | `work/uwe5622-wifi-armbian` | **One SPI/GPIO owning renderer**; Russian dashboard, startup/state/error screens, return to Bjorni after 8 s in idle | `platform/display/screensaver/test-screensaver.py`: PPM previews, SPI `write/ioctl` wrappers, mock supervisor, launcher rebuild | New integrated status switching **not physically validated** |
 | Image / WLAN backport | work branch | Armbian image scripting, selected UWE5622 patches, optional disabled onboard modules | CI build/module/patch checks from previous milestones | No claim new UI/API has been shipped in that image |
 
-**Confirmed CI evidence, 2026-11-24:**
+**Confirmed separate CI evidence, 2026-11-24:**
 - [ST7789 renderer + status screen, GitHub Actions run 45483412806](https://github.com/Medvedolog/medvetalkie/actions/runs/45483412806): build and `test-screensaver.py` passed. Tests include status preview (Russian labels, faults, invalid/stale feed), SPI fake-write behavior, deterministic launcher generation and Bjorni render.
 - [Core + IPC/SQLite/BlueZ + display status agent, run 45483547876](https://github.com/Medvedolog/medvetalkie/actions/runs/45483547876): **9/9 CTest suites passed**.
-- These are **two independent CI checkouts**. A single checkout with both display code and its Core producer has **not yet** been integrated, packaged, or physically exercised; no end-to-end hardware success claim.
+- The code from both separate checkouts has since been ported to the same existing Armbian work branch, including a new `core_display_ppm_e2e` regression test. **Combined CI result is pending verification at the time of this handoff update.** No end-to-end physical hardware proof is claimed.
 
 ## 4. Status screen contract and transition policy
 
@@ -61,8 +61,8 @@ The technical-spec baseline is [MedveTalkie TZ v1.4](MedveTalkie_TZ_v1.4.md), es
 
 ## 6. Next tasks (priority order)
 
-1. **Integrate** `feature/web-alpha-usb-diagnostics` into existing `work/uwe5622-wifi-armbian` without creating any branch. Resolve conflicting `README.md`, `CMakeLists.txt`, `.github/workflows/build.yml`, and TZ/documentation deliberately; preserve tested onboard-module blacklist and original Bjorni launcher.
-2. In the unified checkout, run **both** `ctest` and `platform/display/screensaver/test-screensaver.py`. Add one automatic end-to-end smoke test `Core API -> display-status producer -> MTSTATUS1 -> ST7789 PPM preview`, then failure injection/recovery.
+1. **Verify integrated code and close redundant PR #2** after successful combined CI. Sources, CMake, workflow, README, architecture, IPC and TZ are reconciled in `work/uwe5622-wifi-armbian`; original Bjorni launcher and onboard-module blacklist are preserved.
+2. In unified CI, run **both** `ctest` and `platform/display/screensaver/test-screensaver.py`. The automatic `core_display_ppm_e2e` smoke test now covers `Core API -> display-status producer -> MTSTATUS1 -> ST7789 PPM preview` and fault after Core termination. Monitor CI until all test suites pass; correct regressions before any deployment.
 3. Provide a **single systemd-controlled display pipeline** with Core IPC and one SPI/GPIO owner; no untested boot autorun. Use `RuntimeDirectory`, `StateDirectory` and bounded restart policy. Verify ownership when producer and SPI renderer run as different users.
 4. Test the complete status UI on the physical Orange Pi with UGREEN installed and builtin WLAN/BT blacklisted; verify fault/standby transitions and no interference with the existing Bjorni animation.
 5. Upgrade the state model: explicit STANDBY, assigned headset roles, real HFP/SCO/PipeWire feedback, battery when available, controls, authorized LAN WebUI. Never expose loopback-only alpha to Ethernet before authentication.
@@ -75,3 +75,13 @@ The technical-spec baseline is [MedveTalkie TZ v1.4](MedveTalkie_TZ_v1.4.md), es
 - `medvetalkie-display-status` writes file `0600`: ensure the display renderer has read access via an explicitly validated service identity or appropriate mode/ACL; do not blindly loosen permission.
 - Separate physical **observed** state from SQLite **desired** state. The GUI may show a saved SPI value even if ST7789 did not apply it.
 - Status indicator `BT_FAILED` currently denotes an unavailable BT observation or missing USB controller, not proof of an HFP session failure. This must be refined once role-aware BT/audio observation is implemented.
+
+## 8. Integration implementation log — 2026-11-24
+
+- Continued in the **existing** `work/uwe5622-wifi-armbian`, not a new branch.
+- Ported IPC transport, SQLite, BlueZ D-Bus/system inventory, read-only Web Alpha, display settings runner, display-status producer and tests from the feature branch. Deliberately updated the core main entry point and CMake. Preserved native Armbian image scripts and Bjorni ST7789 renderer.
+- Combined `.github/workflows/build.yml`: install CivetWeb, json-c, sqlite3 and libdbus; C11 CMake build, all Core CTest cases, ST7789/Bjorni/status screen regression in the **same checkout**.
+- Added `tests/test_display_e2e.py` as a **no-GPIO/no-radio integration test**. It invokes the real Core, the real status-publisher IPC binary, and the actual self-contained Bjorni renderer with `--preview`; asserts fail-closed `CORE_OFFLINE` after killing Core. It does not prove SPI electrical timing or HFP audio.
+- Reconciled `docs/IPC.md`, architecture description, TZ v1.4 appendices, and README. Independent source branch/PR retained only temporarily until green CI confirms integration.
+- **Gate remains:** green combined CI, independent display test, no mutation of live Orange Pi or `main`, then physical tests of one SPI owner, UGREEN+BlueZ status and Bjorni status transition.
+
