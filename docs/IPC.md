@@ -119,6 +119,58 @@ implemented**. Never infer HFP readiness or active audio from a healthy core,
 two enumerated USB adapters or a running web page.
 
 
+## Passive USB/HCI observation (2026-11-24)
+
+Core query `bt.controllers` and the loopback-only Web Alpha
+`GET /api/v1/bt/controllers` enumerate kernel HCI devices under
+`/sys/class/bluetooth/hci*` and discover their USB ancestor's
+VID/PID, product and physical-port topology. This is **read-only**;
+it never scans, pairs, reloads drivers, starts a voice profile, or
+modifies the BlueZ database.
+
+The JSON reply contains `source:"kernel_sysfs"`,
+`bluez_state:"NOT_CHECKED"`, `status:"KERNEL_ENUMERATED"`,
+`controller_count`, `usb_controller_count`, and a sorted
+`controllers` array. A controller includes its temporary `hciN`,
+optional address, `transport`, USB port/VID/PID when mapped, and
+`hfp_observed:"NOT_CHECKED"`. `identity_verified=false`
+until role binding is separately confirmed; **do not** save `hciN`
+as stable device identity. USB serials are not returned through HTTP.
+An inaccessible sysfs returns `NOT_READY` instead of a fabricated
+zero-controller result. Kernel inventory does **not** prove BlueZ
+Adapter1 availability, HFP profile readiness or SCO audio.
+
+Host fixture tests use only `--bluetooth-sysfs-root ABS_PATH` on
+`medvetalkied` to simulate identical UGREEN ATS2851 devices
+(`10d7:b012`) behind different USB ports. That argument is a
+local test/developer override, not an API exposed to remote clients.
+
+## Local display startup adapter (2026-11-24)
+
+The `medvetalkie-display-runner` binary reads `settings.get`
+from the same Unix IPC contract. It does not modify SQLite or display
+settings. The operator supplies an **explicit absolute path** to a
+local, non-symlink, non-group/world-writable copy of the verified
+`platform/display/medvetalkie-screensaver.sh` from
+`work/uwe5622-wifi-armbian`. When run as root it requires that
+script to be root-owned.
+
+```sh
+./build/medvetalkie-display-runner \
+  --ipc-socket /tmp/medvetalkie-api/core.sock \
+  --script /opt/medvetalkie/medvetalkie-screensaver.sh --dry-run
+```
+
+With `screensaver_enabled=false`, the program does not start the
+renderer. Otherwise it prints the validated SPI MHz and FPS it would
+use. Only the explicit `--run` option replaces the process with
+`/bin/bash` and the script, passing exactly `--spi-mhz N --fps N`;
+there is no interpolated shell command. This is **local startup only**:
+not systemd autostart, not hot reload, not a WebUI control, and not
+yet validated with physical ST7789 hardware as an integrated service.
+The hardware screensaver lives in another development branch and is
+not silently copied or auto-installed.
+
 ## SQLite desired-settings Alpha (local developer interface)
 
 To enable durable settings explicitly, create a **private** state directory
