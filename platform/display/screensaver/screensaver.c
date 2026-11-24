@@ -98,6 +98,215 @@ static void text(int x, int y, const char *str, int scale, uint16_t colour)
         }
     }
 }
+
+/* Status UI shares the existing SPI/GPIO owner with the Bjorni animation.
+ * A separate unprivileged Core-IPC bridge writes a small, atomically replaced
+ * status file. This renderer never talks to BlueZ or infers HFP readiness.
+ */
+#include <sys/stat.h>
+
+typedef struct {
+    char mode[24], headset1[24], headset2[24], voice[24];
+    char network[24], radio[24], battery[24], fault[24];
+    unsigned bt_usb, bt_connected;
+} display_status;
+
+static const char *status_file;
+static double last_status_poll = -1, status_visible_since;
+static display_status current_status;
+static int status_initialized;
+
+static int status_token(const char *value)
+{
+    static const char *const known[] = {
+        "BOOT", "STARTING", "STANDBY", "UNCONFIGURED", "UNKNOWN",
+        "INTERCOM", "SOLO_STEREO", "ANDROID_MEDIA", "PHONE_DIRECT",
+        "ANDROID_BRIDGE_CALL", "PAIRING", "RADIO", "GAME", "DEGRADED",
+        "ERROR", "CORE_OFFLINE", "UNASSIGNED", "DISCONNECTED",
+        "CONNECTING", "CONNECTED_NO_AUDIO", "PROFILE_PENDING",
+        "HFP_READY", "A2DP_READY", "RECOVERING", "NOT_VERIFIED",
+        "NOT_READY", "READY", "NONE", "LAN", "WIFI", "LTE",
+        "NO_LINK", "NOT_AVAILABLE", "LOW", "GOOD", "BT_FAILED",
+        "AUDIO_FAILED", "LOW_BATTERY"
+    };
+    for (size_t i=0;i<sizeof(known)/sizeof(*known);++i)
+        if (!strcmp(value,known[i])) return 1;
+    return 0;
+}
+static void default_status(display_status *s)
+{
+    memset(s,0,sizeof(*s));
+    strcpy(s->mode,"CORE_OFFLINE");
+    strcpy(s->headset1,"UNASSIGNED");
+    strcpy(s->headset2,"UNASSIGNED");
+    strcpy(s->voice,"NOT_VERIFIED");
+    strcpy(s->network,"UNKNOWN");
+    strcpy(s->radio,"NOT_AVAILABLE");
+    strcpy(s->battery,"UNKNOWN");
+    strcpy(s->fault,"CORE_OFFLINE");
+}
+static int parse_status_file(const char *path, display_status *out)
+{
+    struct stat st;
+    char line[128];
+    FILE *file;
+    time_t now=time(NULL);
+    if (!path || lstat(path,&st) || !S_ISREG(st.st_mode) ||
+        st.st_size < 12 || st.st_size > 1024 ||
+        st.st_mtime > now+5 || now-st.st_mtime > 12) return 0;
+    file=fopen(path,"r");
+    if(!file)return 0;
+    display_status next;
+    default_status(&next);
+    if (!fgets(line,sizeof(line),file) || strcmp(line,"MTSTATUS1\n")) {
+        fclose(file);return 0;
+    }
+    /* The only accepted fields are whitelisted status enums and counts.
+     * No free text, paths, commands, MAC addresses or credentials. */
+    while(fgets(line,sizeof(line),file)) {
+        char *sep=strchr(line,'=');
+        size_t n=strlen(line);
+        if (!sep || n==0 || n>=sizeof(line)-1 || line[n-1]!='\n') {
+            fclose(file);return 0;
+        }
+        line[n-1]=0;
+        *sep++=0;
+        if (!strcmp(line,"bt_usb") || !strcmp(line,"bt_connected")) {
+            unsigned count=0;
+            if(!*sep){fclose(file);return 0;}
+            for(const char *p=sep;*p;++p) {
+                if(*p<'0'||*p>'9'){fclose(file);return 0;}
+                count=count*10u+(unsigned)(*p-'0');
+                if(count>32){fclose(file);return 0;}
+            }
+            if(!strcmp(line,"bt_usb"))next.bt_usb=count;
+            else next.bt_connected=count;
+            continue;
+        }
+        char *dest=NULL;
+        if(!strcmp(line,"mode"))dest=next.mode;
+        else if(!strcmp(line,"headset1"))dest=next.headset1;
+        else if(!strcmp(line,"headset2"))dest=next.headset2;
+        else if(!strcmp(line,"voice"))dest=next.voice;
+        else if(!strcmp(line,"network"))dest=next.network;
+        else if(!strcmp(line,"radio"))dest=next.radio;
+        else if(!strcmp(line,"battery"))dest=next.battery;
+        else if(!strcmp(line,"fault"))dest=next.fault;
+        else {fclose(file);return 0;}
+        if(strlen(sep)>=24 || !status_token(sep)){fclose(file);return 0;}
+        strcpy(dest,sep);
+    }
+    if(ferror(file)){fclose(file);return 0;}
+    fclose(file);
+    *out=next;
+    return 1;
+}
+
+/* 5x7 Cyrillic uppercase glyphs for fixed Russian dashboard labels. */
+struct ru_glyph { unsigned unicode; uint8_t rows[7]; };
+static const struct ru_glyph ru_font[]={
+ {0x410,{14,17,17,31,17,17,17}}, /* А */
+ {0x411,{31,16,16,30,17,17,30}}, /* Б */
+ {0x412,{30,17,17,30,17,17,30}}, /* В */
+ {0x413,{31,16,16,16,16,16,16}}, /* Г */
+ {0x414,{14,10,10,10,10,31,17}}, /* Д */
+ {0x415,{31,16,16,30,16,16,31}}, /* Е */
+ {0x416,{21,21,14,4,14,21,21}},  /* Ж */
+ {0x417,{14,17,1,6,1,17,14}},   /* З */
+ {0x418,{17,19,21,21,21,25,17}},/* И */
+ {0x419,{10,0,17,19,21,25,17}}, /* Й */
+ {0x41a,{17,18,20,24,20,18,17}},/* К */
+ {0x41b,{7,9,17,17,17,17,17}},  /* Л */
+ {0x41c,{17,27,21,21,17,17,17}},/* М */
+ {0x41d,{17,17,17,31,17,17,17}},/* Н */
+ {0x41e,{14,17,17,17,17,17,14}},/* О */
+ {0x41f,{31,17,17,17,17,17,17}},/* П */
+ {0x420,{30,17,17,30,16,16,16}},/* Р */
+ {0x421,{14,17,16,16,16,17,14}},/* С */
+ {0x422,{31,4,4,4,4,4,4}},      /* Т */
+ {0x423,{17,17,17,15,1,17,14}}, /* У */
+ {0x424,{4,14,21,21,21,14,4}},  /* Ф */
+ {0x425,{17,17,10,4,10,17,17}}, /* Х */
+ {0x426,{17,17,17,17,17,31,1}}, /* Ц */
+ {0x427,{17,17,17,15,1,1,1}},   /* Ч */
+ {0x428,{21,21,21,21,21,21,31}},/* Ш */
+ {0x429,{21,21,21,21,21,31,1}}, /* Щ */
+ {0x42a,{24,8,14,9,9,9,14}},    /* Ъ */
+ {0x42b,{17,17,29,21,21,21,29}},/* Ы */
+ {0x42c,{16,16,30,17,17,17,30}},/* Ь */
+ {0x42d,{14,17,1,7,1,17,14}},   /* Э */
+ {0x42e,{18,21,21,29,21,21,18}},/* Ю */
+ {0x42f,{15,17,17,15,5,9,17}}  /* Я */
+};
+static void ru_text(int x,int y,const char *str,int scale,uint16_t colour)
+{
+    const unsigned char *p=(const unsigned char *)str;
+    while(*p && x<WIDTH-5*scale){
+        unsigned cp=0;
+        if(*p<128){cp=*p++;if(cp>='a'&&cp<='z')cp-=32;}
+        else if(p[0]==0xd0 && p[1]>=0x90 && p[1]<=0xbf) {
+            cp=0x410u+(unsigned)(p[1]-0x90);p+=2;
+        } else if(p[0]==0xd1 && p[1]>=0x80 && p[1]<=0x8f) {
+            cp=0x440u+(unsigned)(p[1]-0x80);p+=2;
+            if(cp>=0x430&&cp<=0x44f)cp-=0x20;
+        } else {++p;x+=6*scale;continue;}
+        if(cp<128){
+            char single[]={ (char)cp,0 };
+            text(x,y,single,scale,colour);
+        } else {
+            for(size_t i=0;i<sizeof(ru_font)/sizeof(*ru_font);++i){
+                if(ru_font[i].unicode!=cp)continue;
+                for(int row=0;row<7;++row)
+                    for(int col=0;col<5;++col)
+                        if(ru_font[i].rows[row]&(1u<<(4-col)))
+                            rect(x+col*scale,y+row*scale,scale,scale,colour);
+                break;
+            }
+        }
+        x+=6*scale;
+    }
+}
+static void status_row(int y,const char *title,const char *value,uint16_t colour)
+{
+    ru_text(15,y,title,2,rgb(137,164,185));
+    text(176,y+2,value,1,colour);
+}
+static void render_status(time_t wall,const display_status *s)
+{
+    memset(pixels,0,sizeof(pixels));
+    uint16_t white=rgb(236,244,250),cyan=rgb(42,220,227);
+    uint16_t amber=rgb(255,181,64),green=rgb(50,215,125),red=rgb(250,72,85);
+    uint16_t colour=green;
+    if(strcmp(s->fault,"NONE"))colour=red;
+    else if(strcmp(s->mode,"STANDBY") || strcmp(s->voice,"READY"))colour=amber;
+    rect(0,0,WIDTH,30,rgb(15,32,45));
+    ru_text(12,9,"MEDVETALKIE",2,cyan);
+    struct tm tm;
+    char clock[16]="--:--";
+    if(localtime_r(&wall,&tm))strftime(clock,sizeof(clock),"%H:%M",&tm);
+    text(264,12,clock,1,white);
+    rect(10,39,300,31,rgb(22,38,52));
+    ru_text(17,49,"РЕЖИМ",2,white);
+    text(133,50,s->mode,1,colour);
+    status_row(81,"ГАРНИТУРА 1",s->headset1,white);
+    status_row(103,"ГАРНИТУРА 2",s->headset2,white);
+    rect(13,124,294,1,rgb(37,65,81));
+    status_row(135,"ГОЛОС",s->voice,strcmp(s->voice,"READY")?amber:green);
+    char bt[24];
+    snprintf(bt,sizeof(bt),"USB %u / ACL %u",s->bt_usb,s->bt_connected);
+    status_row(156,"СЕТЬ",s->network,white);
+    status_row(177,"БТ",bt,cyan);
+    status_row(198,"РАДИО",s->radio,rgb(176,192,205));
+    rect(0,223,WIDTH,17,strcmp(s->fault,"NONE")?rgb(100,24,31):rgb(23,47,55));
+    if(strcmp(s->fault,"NONE")){
+        ru_text(12,229,"ОШИБКА",1,white);
+        text(110,228,s->fault,1,white);
+    } else {
+        ru_text(12,229,"БАТАРЕЯ",1,white);
+        text(120,228,s->battery,1,white);
+    }
+}
+
 static unsigned read_le(FILE *file, int count)
 {
     unsigned result = 0;
@@ -323,6 +532,7 @@ static unsigned setting(const char *value, unsigned max, const char *name)
 int main(int argc,char **argv)
 {
     int bgr=0;const char *preview=NULL,*asset=getenv("MEDVETALKIE_SPRITE");
+    status_file=getenv("MEDVETALKIE_STATUS_FILE");
     double frame=0;
     const char *mhz_env=getenv("MEDVETALKIE_SPI_MHZ"),*fps_env=getenv("MEDVETALKIE_FPS");
     if(mhz_env)spi_mhz=setting(mhz_env,16,"SPI MHz");
@@ -331,6 +541,7 @@ int main(int argc,char **argv)
         if(!strcmp(argv[i],"--bgr"))bgr=1;
         else if(!strcmp(argv[i],"--no-sync"))continue; /* launcher handles this */
         else if(!strcmp(argv[i],"--preview") && i+1<argc)preview=argv[++i];
+        else if(!strcmp(argv[i],"--status-file") && i+1<argc)status_file=argv[++i];
         else if(!strcmp(argv[i],"--spi-mhz") && i+1<argc)
             spi_mhz=setting(argv[++i],16,"SPI MHz");
         else if(!strcmp(argv[i],"--fps") && i+1<argc)
@@ -341,7 +552,7 @@ int main(int argc,char **argv)
         } else if(!strcmp(argv[i],"--help")) {
             puts("Bjorni screensaver: --bgr, --no-sync, --spi-mhz N, --fps N\n"
                  "Defaults: 1 MHz SPI (verified wiring), up to 25 FPS. Try 4 MHz first.\n"
-                 "--preview FILE.ppm --frame SECONDS renders without GPIO/SPI.\n"
+                 "--preview FILE.ppm --frame SECONDS --status-file FILE (status preview).\n"
                  "Uses current local system time. Ctrl+C stops and releases GPIO.\n"
                  "MEDVETALKIE_PROXY sets the HTTPS time-sync proxy (launcher).\n"
                  "MEDVETALKIE_TZ overrides the local timezone, e.g. Europe/Moscow.");return 0;
@@ -350,7 +561,17 @@ int main(int argc,char **argv)
     if(!asset){fputs("Run using medvetalkie-screensaver.sh\n",stderr);return 2;}
     load_bjorni(asset);
     const char *zone=getenv("MEDVETALKIE_TZ");if(zone && setenv("TZ",zone,1))die("TZ");tzset();
-    if(preview){render(frame,time(NULL),1);ppm(preview);return 0;}
+    if(status_file && status_file[0]!='/'){
+        fputs("Status file path must be absolute\n",stderr);return 2;
+    }
+    if(preview){
+        if(status_file){
+            display_status state;default_status(&state);
+            (void)parse_status_file(status_file,&state);
+            render_status(time(NULL),&state);
+        }else render(frame,time(NULL),1);
+        ppm(preview);return 0;
+    }
     if(geteuid()!=0){fputs("Run as root to access SPI/GPIO\n",stderr);return 1;}
     struct sigaction action={0};action.sa_handler=stop_requested;sigemptyset(&action.sa_mask);
     if(sigaction(SIGINT,&action,NULL) || sigaction(SIGTERM,&action,NULL))die("sigaction");
@@ -374,17 +595,35 @@ int main(int argc,char **argv)
            spi_mhz,pixel_chunk,target_fps);fflush(stdout);
     puts("Bjorni + live clock. HTTPS time check every 15 minutes. Ctrl+C to stop.");
     double start=monotonic_seconds(), report=start, spi_total=0;
+    status_visible_since=start;
     unsigned frames=0;int first=1;
     while(!stopping) {
         double begin=monotonic_seconds();
-        render(begin-start,time(NULL),time_synced());
+        int show_status=0;
+        if(status_file){
+            if(last_status_poll<0 || begin-last_status_poll>=0.5){
+                display_status fresh;default_status(&fresh);
+                (void)parse_status_file(status_file,&fresh);
+                if(!status_initialized || memcmp(&fresh,&current_status,sizeof(fresh))){
+                    current_status=fresh;
+                    status_visible_since=begin;
+                    status_initialized=1;
+                }
+                last_status_poll=begin;
+            }
+            show_status=strcmp(current_status.mode,"STANDBY") ||
+                        strcmp(current_status.fault,"NONE") ||
+                        begin-status_visible_since<8.0;
+        }
+        if(show_status)render_status(time(NULL),&current_status);
+        else render(begin-start,time(NULL),time_synced());
         double transfer=monotonic_seconds();refresh(first);first=0;
         double end=monotonic_seconds();spi_total+=end-transfer;++frames;
         if(end-report>=1) {
             last_fps=frames/(end-report);last_spi_ms=1000*spi_total/frames;
             report=end;spi_total=0;frames=0;
         }
-        double delay=1.0/target_fps-(monotonic_seconds()-begin);
+        double delay=1.0/(show_status?2.0:target_fps)-(monotonic_seconds()-begin);
         if(delay>0) {
             struct timespec nap={(time_t)delay,(long)((delay-floor(delay))*1e9)};
             (void)nanosleep(&nap,NULL);
