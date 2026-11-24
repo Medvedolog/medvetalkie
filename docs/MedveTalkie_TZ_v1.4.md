@@ -501,6 +501,23 @@ P0: safe inventory of hardware, stable logical bindings, lifecycle/reconnect rep
 
 ## 27. Единый API управления MedveTalkie (обязательное дополнение от 24.11.2026)
 
+**Дополнение к статусу на 24.11.2026 (BT Inventory / Display Runner Alpha):**
+реализован пассивный `bt.controllers` на основе Linux sysfs с сопоставлением
+HCI-контроллеров и физических USB-портов, включая одинаковые UGREEN ATS2851.
+В Web Alpha доступен `GET /api/v1/bt/controllers`. Поскольку получение
+сведений из sysfs не подтверждает состояние BlueZ и HFP, API явно возвращает
+`bluez_state=NOT_CHECKED`, `identity_verified=false` и
+`hfp_observed=NOT_CHECKED`; сопряжение и передача звука не выполняются.
+Создан отдельный C11 `medvetalkie-display-runner`, который читает сохранённые
+настройки через IPC, безопасно подготавливает аргументы уже проверенной
+заставки Бйорни и запускает её **только** после явного локального `--run`.
+По умолчанию используется `--dry-run`. Полноценный `systemd`-автозапуск,
+применение параметров «на лету», копирование скрипта из аппаратной ветки,
+проверка на Orange Pi и авторизованная доступная по LAN веб-панель **пока не
+выполнены**. Программная часть прошла 7/7 тестов CI (run 45474417800).
+
+
+
 **Статус реализации на 24.11.2026 (Core/Settings Alpha, проверено в CI):**
 в `feature/web-alpha-usb-diagnostics` реализованы C11 IPC v1, read-only
 `health`/`system.status`/`system.capabilities`, SQLite `user_version=1`
