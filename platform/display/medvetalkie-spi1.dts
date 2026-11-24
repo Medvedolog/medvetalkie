@@ -1,0 +1,43 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "xunlong,orangepi-zero3", "allwinner,sun50i-h618";
+
+    fragment@0 {
+        target = <&pio>;
+        __overlay__ {
+            mt_display_spi_pins: mt-display-spi-pins {
+                pins = "PH6", "PH7", "PH8";
+                function = "spi1";
+            };
+        };
+    };
+
+    fragment@1 {
+        target-path = "/aliases";
+        __overlay__ {
+            spi1 = "/soc/spi@5011000";
+        };
+    };
+
+    fragment@2 {
+        target = <&spi1>;
+        __overlay__ {
+            status = "okay";
+            pinctrl-names = "default";
+            pinctrl-0 = <&mt_display_spi_pins>;
+            cs-gpios = <&pio 7 9 1>;
+            num-cs = <1>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+
+            spidev@0 {
+                compatible = "armbian,spi-dev";
+                reg = <0>;
+                spi-max-frequency = <1000000>;
+                status = "okay";
+            };
+        };
+    };
+};
