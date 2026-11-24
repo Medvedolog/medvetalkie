@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install web dependencies
-        run: sudo apt-get update && sudo apt-get install -y libcivetweb-dev curl
+        run: sudo apt-get update && sudo apt-get install -y libcivetweb-dev libjson-c-dev curl
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - name: Build
