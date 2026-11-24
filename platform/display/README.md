@@ -66,17 +66,22 @@ The tool does not install services, enable autostart or change boot settings.
   `6.18.64-current-sunxi64`.
 - After installing this overlay, `/dev/spidev1.0` appeared and the kernel logged
   successful SPI1 host/child registration. Earlier pinctrl messages remain
-  recorded; complete pin-level/visual verification is still pending.
+  recorded; visual display output was subsequently confirmed below.
 - On the operator's image, `gpiodetect` reports `gpiochip0 [7022000.pinctrl]`
   with 32 lines and `gpiochip1 [300b000.pinctrl]` with 288 lines. Lines 69/70
   are unnamed inputs. The original name-only test stopped before display
   initialization; the fallback above addresses that software discovery failure.
+- After the GPIO discovery fix (`6ff101af3cdb21ab2b8cff837f0f982eee6a8acf`),
+  the operator visually confirmed the colour fills and final colour bars on the
+  connected MSP2008/ST7789. This validates basic display initialization and
+  drawing with the wiring above at 1 MHz. Individual corner markers, sustained
+  refresh, LVGL integration and automatic startup have not been verified.
 - Two USB Bluetooth adapters enumerate behind a Realtek RTS5411 hub, both with
   VID:PID `10d7:b012`. Linux v6.18 `btusb.c` identifies this as Actions ATS2851
-  and applies `BTUSB_ACTIONS_SEMI` quirks. This is USB enumeration evidence,
-  not proof of two BlueZ controllers or working HFP audio.
-- Display pixels, pairing, independent controller addresses, one-headset HFP
-  speaker/microphone and two simultaneous HFP sessions remain unverified.
+  and applies `BTUSB_ACTIONS_SEMI` quirks. The operator's `bluetoothctl list`
+  subsequently showed two controllers with distinct addresses, and BlueZ 5.82
+  was active. Pairing, one-headset HFP speaker/microphone and two simultaneous
+  HFP sessions remain unverified.
 
 References: [Linux GPIO v2](https://docs.kernel.org/userspace-api/gpio/gpio-v2-get-line-ioctl.html),
 [spidev](https://docs.kernel.org/spi/spidev.html),
