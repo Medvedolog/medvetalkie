@@ -6,6 +6,7 @@
 #include "medvetalkie/service.h"
 #include "medvetalkie/settings.h"
 #include "settings_api.h"
+#include "bt_inventory.h"
 
 #include <errno.h>
 #include <json-c/json.h>
@@ -30,6 +31,7 @@ static atomic_uint clients = ATOMIC_VAR_INIT(0);
 static mt_settings_store settings_store;
 static int settings_enabled;
 static int local_settings_writes;
+static const char *bluetooth_sysfs_root = "/sys";
 
 static void stop_signal(int signal_number)
 {
@@ -180,6 +182,7 @@ static json_object *process_request(const char *input, size_t size)
         json_object_object_add(capabilities, "core_ipc_v1", json_object_new_boolean(1));
         json_object_object_add(capabilities, "web_read_only", json_object_new_boolean(1));
         json_object_object_add(capabilities, "bluetooth_management", json_object_new_boolean(0));
+        json_object_object_add(capabilities, "bt_controller_inventory", json_object_new_boolean(1));
         json_object_object_add(capabilities, "hfp_audio", json_object_new_boolean(0));
         json_object_object_add(capabilities, "ble_gatt", json_object_new_boolean(0));
         json_object_object_add(capabilities, "settings_read", json_object_new_boolean(settings_enabled));
@@ -187,6 +190,8 @@ static json_object *process_request(const char *input, size_t size)
                                json_object_new_boolean(settings_enabled && local_settings_writes));
         json_object_object_add(capabilities, "display_control", json_object_new_boolean(0));
         json_object_object_add(reply, "capabilities", capabilities);
+    } else if (strcmp(action, "bt.controllers") == 0) {
+        reply = mt_bt_controllers(bluetooth_sysfs_root);
     } else {
         reply = mt_core_settings_query(settings_enabled ? &settings_store : NULL, action);
         if (!reply) {
@@ -335,14 +340,18 @@ int main(int argc, char **argv)
             db_path = argv[++i];
         else if (!strcmp(argv[i], "--allow-local-settings"))
             local_settings_writes = 1;
+        else if (!strcmp(argv[i], "--bluetooth-sysfs-root") && i + 1 < argc)
+            bluetooth_sysfs_root = argv[++i];
         else {
             fprintf(stderr, "Unknown or incomplete option: %s\n", argv[i]);
             return 64;
         }
     }
-    if (!socket_path || (local_settings_writes && !db_path)) {
+    if (!socket_path || bluetooth_sysfs_root[0] != '/' ||
+        (local_settings_writes && !db_path)) {
         fputs("Usage: medvetalkied --ipc-socket ABS_PATH "
-              "[--db-path ABS_PATH [--allow-local-settings]]\n", stderr);
+              "[--db-path ABS_PATH [--allow-local-settings]] "
+              "[--bluetooth-sysfs-root ABS_PATH]\n", stderr);
         return 64;
     }
     if (db_path) {
