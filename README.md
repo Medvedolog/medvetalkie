@@ -39,6 +39,39 @@ BlueZ, PipeWire and WirePlumber remain system services. Audio samples are **neve
 
 See [Architecture](docs/ARCHITECTURE.md), [hardware validation](docs/VALIDATION.md), [roadmap](docs/ROADMAP.md) and [API design](docs/IPC.md).
 
+## Core API / Web Alpha (development branch)
+
+The `feature/web-alpha-usb-diagnostics` branch adds a **read-only** C11
+Core API over a length-prefixed JSON Unix socket and a loopback-only CivetWeb
+adapter. This is the first implementation of the shared control contract
+in [docs/IPC.md](docs/IPC.md), not the finished settings interface.
+
+For a development machine with dependencies installed:
+
+```sh
+sudo apt-get install -y build-essential cmake libjson-c-dev libcivetweb-dev curl
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel 2
+ctest --test-dir build --output-on-failure
+
+mkdir -p /tmp/medvetalkie-api
+./build/medvetalkied --ipc-socket /tmp/medvetalkie-api/core.sock
+# In another terminal, under the same user:
+./build/medvetalkie-web --ipc-socket /tmp/medvetalkie-api/core.sock
+```
+
+Open `http://127.0.0.1:8765/` **on that same machine**. HTTP is limited to
+loopback and serves `/api/v1/health`, `/api/v1/status` and
+`/api/v1/capabilities`. No remote listener, login or modification endpoints
+exist; **do not bind it to LAN/0.0.0.0 or proxy it to an untrusted network**.
+The IPC server authorizes only same-UID clients for now.
+For real deployment, use systemd RuntimeDirectory and separate authorized
+service identities instead of the temporary example above.
+
+The physical display, bootable Armbian image and USB-BT bench work are in
+the separate `work/uwe5622-wifi-armbian` branch. These branches have **not**
+yet been integrated into one tested SD-card image.
+
 ## Current state
 
 This initial repository contains the architecture and a basic buildable C11 process skeleton. **HFP routing, CivetWeb, LVGL, hardware access and installation automation are not yet implemented.** The skeleton is not intended for real riding.
