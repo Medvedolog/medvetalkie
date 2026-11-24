@@ -1,6 +1,7 @@
 /* BlueZ passive ObjectManager adapter.
  * GetManagedObjects is read-only. Paired/Connected != HFP audio readiness.
  */
+#define _POSIX_C_SOURCE 200809L
 #include "bt_bluez.h"
 #include <stdio.h>
 #include <string.h>
