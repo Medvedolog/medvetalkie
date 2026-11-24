@@ -1,9 +1,11 @@
-/* MedveTalkie Core API Alpha: bounded, read-only JSON/Unix IPC.
- * No Bluetooth, audio or display operation is claimed to be implemented.
+/* MedveTalkie Core API Alpha: framed JSON/Unix IPC + opt-in local SQLite settings.
+ * No Bluetooth, audio or display hardware operations are performed here.
  */
 #define _GNU_SOURCE
 #include "medvetalkie/ipc.h"
 #include "medvetalkie/service.h"
+#include "medvetalkie/settings.h"
+#include "settings_api.h"
 
 #include <errno.h>
 #include <json-c/json.h>
@@ -18,12 +20,16 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <time.h>
 #include <sys/un.h>
 #include <unistd.h>
 
 #define MT_MAX_CLIENTS 8u
 static volatile sig_atomic_t stopping;
 static atomic_uint clients = ATOMIC_VAR_INIT(0);
+static mt_settings_store settings_store;
+static int settings_enabled;
+static int local_settings_writes;
 
 static void stop_signal(int signal_number)
 {
@@ -101,7 +107,7 @@ static json_object *process_request(const char *input, size_t size)
     }
     kind = json_object_get_string(field);
     if (strcmp(kind, "command") == 0) {
-        json_object *id;
+        json_object *id, *operation, *args = NULL;
         if (!json_object_object_get_ex(request, "id", &id) ||
             !json_object_is_type(id, json_type_string) ||
             !valid_id(json_object_get_string(id))) {
@@ -109,9 +115,24 @@ static json_object *process_request(const char *input, size_t size)
             set_error(reply, "BAD_REQUEST", "Invalid command id");
             goto cleanup;
         }
+        if (!json_object_object_get_ex(request, "action", &operation) ||
+            !json_object_is_type(operation, json_type_string)) {
+            reply = base_reply("rejected");
+            json_object_object_add(reply, "id",
+                                   json_object_new_string(json_object_get_string(id)));
+            set_error(reply, "BAD_REQUEST", "Missing command action");
+            goto cleanup;
+        }
+        (void)json_object_object_get_ex(request, "args", &args);
+        reply = mt_core_settings_command(settings_enabled ? &settings_store : NULL,
+                                          local_settings_writes,
+                                          json_object_get_string(id),
+                                          json_object_get_string(operation), args);
+        if (reply) goto cleanup;
         reply = base_reply("rejected");
-        json_object_object_add(reply, "id", json_object_new_string(json_object_get_string(id)));
-        set_error(reply, "NOT_READY", "Mutating commands are not implemented in API Alpha");
+        json_object_object_add(reply, "id",
+                               json_object_new_string(json_object_get_string(id)));
+        set_error(reply, "NOT_READY", "This hardware command is not implemented");
         goto cleanup;
     }
     if (strcmp(kind, "query") != 0 ||
@@ -133,12 +154,24 @@ static json_object *process_request(const char *input, size_t size)
     } else if (strcmp(action, "system.status") == 0) {
         json_object *state = json_object_new_object();
         reply = base_reply("snapshot");
-        json_object_object_add(reply, "revision", json_object_new_int64(0));
+        mt_settings_snapshot snapshot;
+        int have_settings = settings_enabled &&
+                            mt_settings_read(&settings_store, &snapshot) == 0;
+        json_object_object_add(reply, "revision",
+                               json_object_new_int64(have_settings ? snapshot.revision : 0));
         json_object_object_add(state, "desired_mode", json_object_new_string("UNSET"));
         json_object_object_add(state, "effective_mode", json_object_new_string("UNKNOWN"));
         json_object_object_add(state, "bluetooth", json_object_new_string("NOT_READY"));
         json_object_object_add(state, "audio", json_object_new_string("NOT_READY"));
         json_object_object_add(state, "display", json_object_new_string("NOT_READY"));
+        if (have_settings) {
+            json_object *display = json_object_new_object();
+            json_object_object_add(display, "spi_mhz", json_object_new_int(snapshot.spi_mhz));
+            json_object_object_add(display, "fps", json_object_new_int(snapshot.fps));
+            json_object_object_add(display, "screensaver_enabled",
+                                   json_object_new_boolean(snapshot.screensaver_enabled));
+            json_object_object_add(state, "desired_display", display);
+        }
         json_object_object_add(reply, "state", state);
     } else if (strcmp(action, "system.capabilities") == 0) {
         json_object *capabilities = json_object_new_object();
@@ -149,12 +182,17 @@ static json_object *process_request(const char *input, size_t size)
         json_object_object_add(capabilities, "bluetooth_management", json_object_new_boolean(0));
         json_object_object_add(capabilities, "hfp_audio", json_object_new_boolean(0));
         json_object_object_add(capabilities, "ble_gatt", json_object_new_boolean(0));
-        json_object_object_add(capabilities, "settings_write", json_object_new_boolean(0));
+        json_object_object_add(capabilities, "settings_read", json_object_new_boolean(settings_enabled));
+        json_object_object_add(capabilities, "settings_write",
+                               json_object_new_boolean(settings_enabled && local_settings_writes));
         json_object_object_add(capabilities, "display_control", json_object_new_boolean(0));
         json_object_object_add(reply, "capabilities", capabilities);
     } else {
-        reply = base_reply("error");
-        set_error(reply, "NOT_SUPPORTED", "This action is not implemented");
+        reply = mt_core_settings_query(settings_enabled ? &settings_store : NULL, action);
+        if (!reply) {
+            reply = base_reply("error");
+            set_error(reply, "NOT_SUPPORTED", "This action is not implemented");
+        }
     }
 
 cleanup:
@@ -270,6 +308,11 @@ static int ipc_server(const char *path)
     }
 cleanup:
     close(server);
+    /* Detached workers must release the settings handle before shutdown. */
+    while (atomic_load(&clients) != 0) {
+        struct timespec pause = {0, 10000000L};
+        (void)nanosleep(&pause, NULL);
+    }
     /* Do not unlink a replacement socket placed by another process. */
     if (lstat(path, &current) == 0 && S_ISSOCK(current.st_mode) &&
         current.st_dev == bound.st_dev && current.st_ino == bound.st_ino)
@@ -279,7 +322,37 @@ cleanup:
 
 int main(int argc, char **argv)
 {
-    if (argc == 3 && strcmp(argv[1], "--ipc-socket") == 0)
-        return ipc_server(argv[2]);
-    return mt_scaffold_main("medvetalkied", argc, argv);
+    const char *socket_path = NULL, *db_path = NULL;
+    int i, result;
+    if (argc == 2 && (strcmp(argv[1], "--version") == 0 ||
+                      strcmp(argv[1], "--help") == 0 ||
+                      strcmp(argv[1], "-h") == 0))
+        return mt_scaffold_main("medvetalkied", argc, argv);
+    for (i = 1; i < argc; ++i) {
+        if (!strcmp(argv[i], "--ipc-socket") && i + 1 < argc)
+            socket_path = argv[++i];
+        else if (!strcmp(argv[i], "--db-path") && i + 1 < argc)
+            db_path = argv[++i];
+        else if (!strcmp(argv[i], "--allow-local-settings"))
+            local_settings_writes = 1;
+        else {
+            fprintf(stderr, "Unknown or incomplete option: %s\n", argv[i]);
+            return 64;
+        }
+    }
+    if (!socket_path || (local_settings_writes && !db_path)) {
+        fputs("Usage: medvetalkied --ipc-socket ABS_PATH "
+              "[--db-path ABS_PATH [--allow-local-settings]]\n", stderr);
+        return 64;
+    }
+    if (db_path) {
+        if (mt_settings_open(&settings_store, db_path) != 0) {
+            fputs("Failed to open owner-private SQLite settings database\n", stderr);
+            return 1; /* Never silently fall back to volatile settings. */
+        }
+        settings_enabled = 1;
+    }
+    result = ipc_server(socket_path);
+    if (settings_enabled) mt_settings_close(&settings_store);
+    return result;
 }
