@@ -1,0 +1,25 @@
+# Managed by MedveTalkie installer
+[Unit]
+Description=MedveTalkie Core API v1
+After=local-fs.target dbus.service
+Wants=dbus.service
+
+[Service]
+Type=simple
+User=medvetalkie
+Group=medvetalkie
+RuntimeDirectory=medvetalkie
+RuntimeDirectoryMode=0700
+StateDirectory=medvetalkie
+StateDirectoryMode=0700
+ExecStartPre=/usr/bin/rm -f /run/medvetalkie/control.sock
+ExecStart=/opt/medvetalkie/current/bin/medvetalkied --ipc-socket /run/medvetalkie/control.sock --db-path /var/lib/medvetalkie/settings.db
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
