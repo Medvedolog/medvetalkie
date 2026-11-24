@@ -79,6 +79,14 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_display_status_agent.py
             $<TARGET_FILE:medvetalkie-display-status>)
   set_tests_properties(display_status_agent PROPERTIES TIMEOUT 15)
+  # Real Core process -> read-only status producer -> actual self-contained
+  # Bjorni renderer in no-hardware 320x240 PPM mode, plus fault injection.
+  add_test(NAME core_display_ppm_e2e
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_display_e2e.py
+            $<TARGET_FILE:medvetalkied>
+            $<TARGET_FILE:medvetalkie-display-status>
+            ${CMAKE_CURRENT_SOURCE_DIR}/platform/display/medvetalkie-screensaver.sh)
+  set_tests_properties(core_display_ppm_e2e PROPERTIES TIMEOUT 40)
 endif()
 
 # Read-only diagnostic binary; deliberately does not bind USB device roles.
