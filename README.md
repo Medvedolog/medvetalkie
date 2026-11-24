@@ -45,6 +45,8 @@ See [Architecture](docs/ARCHITECTURE.md), [hardware validation](docs/VALIDATION.
 
 The [full-image build profile](platform/armbian-image/README.md) stages reviewed AW859A Wi-Fi fixes and optional SDIO Bluetooth transport patches. It compiles BSP, Wi-Fi and BT modules against the **same kernel ABI** as the newly built Armbian image; USB Bluetooth remains supported by the stock kernel. [GitHub Actions](.github/workflows/armbian-full-image.yml) validates source profiles on push and offers a **manual** full-image build on a host with at least 50 GiB free. **No bootable custom Armbian image or board-level validation is claimed yet.**
 
+**Armbian in-place deployment via mixed HTTP proxy:** [installer, dry-run, systemd services, simulation and rollback](platform/deploy/README.md). No reflash or built-in Wi-Fi/BT reactivation is required.
+
 ## Core API, Bluetooth and display-status integration
 
 The current work branch contains both the Armbian/ST7789 renderer and the experimental Core API v1. The Core process supplies versioned JSON over a private Unix socket; an independent CivetWeb process is loopback-only and read-only. SQLite stores **desired settings**, while live Bluetooth observation uses kernel sysfs and the system BlueZ D-Bus. Neither `Paired` nor `Connected` proves two-way HFP/SCO audio.
