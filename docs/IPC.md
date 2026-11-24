@@ -119,6 +119,41 @@ implemented**. Never infer HFP readiness or active audio from a healthy core,
 two enumerated USB adapters or a running web page.
 
 
+## BlueZ D-Bus observation (2026-11-24)
+
+Core IPC `bt.bluez` and the **loopback-only, read-only**
+`GET /api/v1/bt/bluez` issue one bounded (400 ms) D-Bus
+`org.freedesktop.DBus.ObjectManager.GetManagedObjects` request
+to the system `org.bluez` service. This is **not** a BlueZ
+management or audio implementation. The process uses libdbus-1
+and filters `org.bluez.Adapter1` and `org.bluez.Device1`.
+
+For each adapter, returns D-Bus object path, optional Bluetooth
+address / alias, `Powered` and `Discovering` (unknown values
+remain JSON null). For each device, returns object path, address,
+alias, adapter path, `Paired`, and `Connected`; absent fields
+remain null. A `Connected` Bluetooth ACL is **not** a valid
+test of HFP SCO audio: every device explicitly reports
+`hfp_audio:"NOT_VERIFIED"` and `sco_transport:"NOT_CHECKED"`.
+No pairing keys, link keys, connection secrets or operations
+are exposed. The in-memory snapshot is capped at 16 adapters
+and 96 devices with an explicit `truncated` flag.
+
+If the system D-Bus, `org.bluez`, or its method response is missing,
+invalid or times out, the query returns `NOT_READY`, **not**
+an invented empty connected-device list or working HFP status.
+The existing `bt.controllers` endpoint remains kernel-sysfs-only;
+adapter HCI-to-USB identity assignment and actual HFP/PipeWire
+verification are separate pending tasks. D-Bus is initialized
+thread-safely before the core's worker threads. Current Web Alpha
+is loopback-only and lacks authentication: do not expose its
+Bluetooth identifiers, names, or endpoints over LAN.
+
+A synthetic ObjectManager message is constructed by
+`tests/test_bluez_parser.c` and validated in CI without physical
+Bluetooth adapters. An actual Orange Pi Zero 3 test with two
+UGREEN ATS2851 controllers and real garнитуры is still required.
+
 ## Passive USB/HCI observation (2026-11-24)
 
 Core query `bt.controllers` and the loopback-only Web Alpha
