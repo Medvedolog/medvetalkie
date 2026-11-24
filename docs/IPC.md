@@ -1,10 +1,11 @@
 # Control IPC and state model — draft protocol v1
 
-**Implementation status (2026-11-24):** read-only Core API Alpha is implemented
-in `medvetalkied`, with a separate loopback-only `medvetalkie-web`
-adapter. The full command engine, persistent state, events, SQLite, Android
-BLE and authenticated network UI remain planned. Alpha is not a usable HFP
-intercom and must not be exposed to an untrusted network.
+**Implementation status (2026-11-24):** Core API Alpha has read-only health,
+capabilities and state queries plus an **opt-in SQLite desired-settings**
+prototype. The separate `medvetalkie-web` remains loopback-only and read-only.
+Actual display control, HFP/audio, Bluetooth commands, subscriptions,
+Android BLE and authenticated remote access are **not** implemented.
+This is not a usable intercom and must not be exposed to an untrusted network.
 
 ## Transport
 
@@ -97,18 +98,81 @@ The server processes at most eight concurrent peer connections, with a
 | `system.status` | `type=snapshot` | Explicit `UNKNOWN` / `NOT_READY` placeholders, revision 0 |
 | `system.capabilities` | `type=capabilities` | Honest implemented / unimplemented feature flags |
 
-Any other query returns `NOT_SUPPORTED`. Every `command` with a syntactically
-valid request ID returns `rejected` / `NOT_READY` **without changing state**.
+Other queries return `NOT_SUPPORTED`. Hardware commands still return
+`rejected` / `NOT_READY` **without changing hardware**. The one exception,
+`settings.patch`, saves desired configuration in SQLite only when both an
+explicit database path and `--allow-local-settings` have been supplied.
 Malformed requests return `BAD_REQUEST` and unknown protocol versions return
 `UNSUPPORTED_VERSION`. Oversize or truncated frames are dropped.
 
 `medvetalkie-web --ipc-socket /run/medvetalkie/control.sock` exposes only
 `127.0.0.1:8765`: `/` (read-only status page), `GET /api/v1/health`,
 `GET /api/v1/status` and `GET /api/v1/capabilities`. It returns HTTP 503
-when core is unreachable and HTTP 405 for non-GET requests. No login,
-remote listener, write API, BLE gateway or user-configurable settings exist yet.
+when core is unreachable and HTTP 405 for non-GET requests. Additional
+read-only endpoints `GET /api/v1/settings` and `GET /api/v1/display` expose
+saved desired configuration, not hardware state. No login, remotely accessible
+listener, HTTP write API or BLE gateway exists.
 
-The planned mutation, operation ID, authenticated HTTP, SQLite, subscriptions,
-WebSocket and BLE behaviors described earlier in this document are **not yet
+The planned general asynchronous hardware operations, authorized HTTP mutations,
+event subscriptions, WebSocket and BLE behaviors described earlier are **not yet
 implemented**. Never infer HFP readiness or active audio from a healthy core,
 two enumerated USB adapters or a running web page.
+
+
+## SQLite desired-settings Alpha (local developer interface)
+
+To enable durable settings explicitly, create a **private** state directory
+owned by the account running the core. The database is created with permission
+`0600`; existing world/group-accessible files and symlinks are rejected.
+No fallback to volatile configuration occurs if the database is invalid.
+The caller creates the parent directory; the project does not yet ship a
+systemd service with `StateDirectory`.
+
+```sh
+mkdir -p -m 700 /tmp/medvetalkie-api
+./build/medvetalkied \
+  --ipc-socket /tmp/medvetalkie-api/core.sock \
+  --db-path /tmp/medvetalkie-api/settings.db
+```
+
+Without `--db-path`, reads return `NOT_READY` and writes are rejected.
+With `--db-path`, `settings.get` and `display.status` are read-only.
+**Only for local development**, adding `--allow-local-settings` allows the
+same-UID IPC client to save settings. The privilege model is not suitable
+for a remotely accessible WebUI until distinct service identities,
+fine-grained authorization and authentication are implemented.
+
+SQLite schema `user_version=1` persists one revisioned desired configuration:
+`device_name` (1–64 UTF-8 bytes, no control characters), `display.spi_mhz`
+(integer 1–16), `display.fps` (integer 1–60), and
+`display.screensaver_enabled` (boolean). Defaults are MedveTalkie,
+1 MHz, 25 FPS, screensaver disabled. The 1 MHz default is deliberately more
+conservative than the 4 MHz speed validated on the real bench. An unsupported
+future schema version fails startup rather than silently downgrading.
+
+A same-UID authorized IPC client can send a **single-frame, synchronous**
+metadata-only command:
+
+```json
+{"v":1,"type":"command","id":"cfg-1","action":"settings.patch",
+ "args":{"expected_revision":0,"device_name":"MedveTalkie",
+         "display":{"spi_mhz":4,"fps":25,"screensaver_enabled":true}}}
+```
+
+The response is a terminal `type=result` with `ok:true`, a new
+`revision`, an `operation` identifier, `applied:"saved_only"` and
+`hardware_applied:false`. This exception does not change the async
+accepted/result design required for future hardware operations. Each patch
+validates **all** supplied fields before an atomic SQLite transaction;
+unknown settings and malformed types are rejected. Every write requires
+`expected_revision`: two clients writing the same revision cause one
+success and one `REVISION_CONFLICT`; retries must first read the latest
+revision. This implements compare-and-swap safety, not a fully durable
+deduplication journal for operation IDs.
+
+The actual ST7789 process is not yet a subscriber to this configuration:
+saving `screensaver_enabled=true` does **not** start animation.
+`display.status` intentionally reports `observed:"UNKNOWN"` and
+`hardware_applied:false`. BlueZ and PipeWire observations are likewise
+not inferred from saved values. Tests cover persistence across restart,
+concurrent CAS, schema compatibility, read-only mode and input rejection.
