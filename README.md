@@ -41,9 +41,10 @@ See [Architecture](docs/ARCHITECTURE.md), [hardware validation](docs/VALIDATION.
 
 ## Core API / Web Alpha (development branch)
 
-The `feature/web-alpha-usb-diagnostics` branch adds a **read-only** C11
-Core API over a length-prefixed JSON Unix socket and a loopback-only CivetWeb
-adapter. This is the first implementation of the shared control contract
+The `feature/web-alpha-usb-diagnostics` branch adds a C11 Core API
+with read-only status and Bluetooth/sysfs inventory, an **opt-in local**
+SQLite desired-settings writer, and a separate **read-only** CivetWeb
+adapter over a length-prefixed JSON Unix socket. This is the first implementation of the shared control contract
 in [docs/IPC.md](docs/IPC.md), not the finished settings interface.
 
 For a development machine with dependencies installed:
@@ -61,12 +62,33 @@ mkdir -p /tmp/medvetalkie-api
 ```
 
 Open `http://127.0.0.1:8765/` **on that same machine**. HTTP is limited to
-loopback and serves `/api/v1/health`, `/api/v1/status` and
-`/api/v1/capabilities`. No remote listener, login or modification endpoints
+loopback and serves `/api/v1/health`, `/api/v1/status`,
+`/api/v1/capabilities`, `/api/v1/settings`, `/api/v1/display` and
+`/api/v1/bt/controllers`. The controller inventory is **kernel sysfs only**:
+it does not check BlueZ D-Bus/HFP/SCO or pair a headset. No remote listener, login or modification endpoints
 exist; **do not bind it to LAN/0.0.0.0 or proxy it to an untrusted network**.
-The IPC server authorizes only same-UID clients for now.
+The IPC server authorizes only same-UID clients for now. To enable the
+local SQLite `settings.patch` operation (never over HTTP), start core
+with `--allow-local-settings`; it saves desired settings but does not
+apply them to hardware.
 For real deployment, use systemd RuntimeDirectory and separate authorized
 service identities instead of the temporary example above.
+
+To prepare the existing Bjorni screensaver for a **manual** launch, an
+optional C11 startup adapter is included; it reads the current desired
+display settings through the same IPC and forwards validated integer
+`--spi-mhz` and `--fps` parameters without shell interpolation:
+
+```sh
+./build/medvetalkie-display-runner \
+  --ipc-socket /tmp/medvetalkie-api/core.sock \
+  --script /opt/medvetalkie/medvetalkie-screensaver.sh --dry-run
+```
+
+The script path must point to an explicitly installed trusted copy of
+the Bjorni renderer. The adapter runs it only with `--run` and when
+`screensaver_enabled=true`; it does not install the script, manage
+services, or implement hot reload. No integrated hardware run is claimed.
 
 The physical display, bootable Armbian image and USB-BT bench work are in
 the separate `work/uwe5622-wifi-armbian` branch. These branches have **not**
@@ -74,7 +96,7 @@ yet been integrated into one tested SD-card image.
 
 ## Current state
 
-This initial repository contains the architecture and a basic buildable C11 process skeleton. **HFP routing, CivetWeb, LVGL, hardware access and installation automation are not yet implemented.** The skeleton is not intended for real riding.
+The default `main` still contains the original C11 skeleton. The Web Alpha branch implements loopback-only CivetWeb, SQLite desired settings and passive HCI/USB inventory; actual HFP routing, authenticated remotely accessible WebUI, LVGL and installation automation remain unimplemented. Do not use this experimental code for riding.
 
 ### Build skeleton on Debian / Armbian
 
