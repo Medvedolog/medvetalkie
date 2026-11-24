@@ -27,7 +27,8 @@ foreach(service IN ITEMS medvetalkied medvetalkie-bt medvetalkie-ui)
 endforeach()
 target_sources(medvetalkied PRIVATE
   src/common/settings.c
-  src/medvetalkied/settings_api.c)
+  src/medvetalkied/settings_api.c
+  src/medvetalkied/bt_inventory.c)
 target_include_directories(medvetalkied PRIVATE ${JSONC_INCLUDE_DIR})
 target_link_libraries(medvetalkied PRIVATE ${JSONC_LIBRARY} SQLite::SQLite3 Threads::Threads)
 
@@ -45,6 +46,10 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_settings_api.py
             $<TARGET_FILE:medvetalkied>)
   set_tests_properties(settings_sqlite PROPERTIES TIMEOUT 25)
+  add_test(NAME bt_inventory_sysfs
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_bt_inventory.py
+            $<TARGET_FILE:medvetalkied>)
+  set_tests_properties(bt_inventory_sysfs PROPERTIES TIMEOUT 15)
 endif()
 
 # Read-only diagnostic binary; deliberately does not bind USB device roles.
