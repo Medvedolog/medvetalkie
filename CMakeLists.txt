@@ -39,6 +39,11 @@ target_link_libraries(medvetalkied PRIVATE ${JSONC_LIBRARY} SQLite::SQLite3 Thre
 add_executable(medvetalkie-display-runner src/medvetalkie-display-runner/main.c)
 target_include_directories(medvetalkie-display-runner PRIVATE ${JSONC_INCLUDE_DIR})
 target_link_libraries(medvetalkie-display-runner PRIVATE medvetalkie_common ${JSONC_LIBRARY})
+# One-way IPC snapshot bridge to the existing SPI-only Bjorni renderer.
+add_executable(medvetalkie-display-status src/medvetalkie-display-status/main.c)
+target_include_directories(medvetalkie-display-status PRIVATE ${JSONC_INCLUDE_DIR})
+target_link_libraries(medvetalkie-display-status PRIVATE medvetalkie_common ${JSONC_LIBRARY})
+
 
 
 include(CTest)
@@ -70,6 +75,10 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_display_runner.py
             $<TARGET_FILE:medvetalkied> $<TARGET_FILE:medvetalkie-display-runner>)
   set_tests_properties(display_runner_bridge PROPERTIES TIMEOUT 15)
+  add_test(NAME display_status_agent
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_display_status_agent.py
+            $<TARGET_FILE:medvetalkie-display-status>)
+  set_tests_properties(display_status_agent PROPERTIES TIMEOUT 15)
 endif()
 
 # Read-only diagnostic binary; deliberately does not bind USB device roles.
