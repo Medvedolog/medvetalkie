@@ -38,6 +38,53 @@ with tempfile.TemporaryDirectory(prefix='medvetalkie-saver-check-') as temp:
                env=dict(env, MEDVETALKIE_SPRITE=str(broken))).returncode == 1
     print('PASS render: star/mushroom/animation frames, black background, bright clock, invalid input')
 
+    # Status dashboard shares one SPI renderer with Bjorni; test its preview
+    # and fail-closed handling without GPIO, network or BlueZ.
+    status = tmp / 'display.status'
+    status.write_text(
+        'MTSTATUS1\nmode=STANDBY\nheadset1=UNASSIGNED\n'
+        'headset2=UNASSIGNED\nvoice=NOT_VERIFIED\n'
+        'network=LAN\nradio=NOT_AVAILABLE\nbattery=UNKNOWN\n'
+        'fault=NONE\nbt_usb=2\nbt_connected=0\n')
+    standby_ppm = tmp / 'standby.ppm'
+    result = run([str(binary), '--preview', str(standby_ppm),
+                  '--status-file', str(status)], env=env)
+    assert result.returncode == 0, result.stderr
+    _, dims, depth, normal_pixels = preview.read_bytes().split(b'\n', 3)
+    _, status_dims, status_depth, standby_pixels = standby_ppm.read_bytes().split(b'\n', 3)
+    assert (dims, depth) == (status_dims, status_depth) == (b'320 240', b'255')
+    assert normal_pixels != standby_pixels, 'dashboard must differ from Bjorni animation'
+    assert standby_pixels.count(b'\x00\x00\x00') > 1000, 'status background'
+    assert standby_pixels.count(bytes((23, 47, 49))) > 100, 'dashboard green footer'
+    assert standby_pixels.count(bytes((100, 24, 24))) == 0, 'no red warning in standby'
+
+    status.write_text(
+        'MTSTATUS1\nmode=INTERCOM\nheadset1=CONNECTED_NO_AUDIO\n'
+        'headset2=UNASSIGNED\nvoice=NOT_VERIFIED\n'
+        'network=LAN\nradio=NONE\nbattery=UNKNOWN\n'
+        'fault=BT_FAILED\nbt_usb=2\nbt_connected=1\n')
+    alert = tmp / 'alert.ppm'
+    result = run([str(binary), '--preview', str(alert),
+                  '--status-file', str(status)], env=env)
+    assert result.returncode == 0, result.stderr
+    assert alert.read_bytes() != standby_ppm.read_bytes(), 'fault must change the dashboard'
+    assert b'BT_FAILED' not in alert.read_bytes(), 'not leaking source text into raw PPM'
+    # Invalid or stale status must never reuse a stale claimed READY.
+    status.write_text('MTSTATUS1\nmode=STANDBY\nvoice=READY\nbad_key=1\n')
+    invalid = tmp / 'invalid.ppm'
+    assert run([str(binary), '--preview', str(invalid),
+                '--status-file', str(status)], env=env).returncode == 0
+    assert invalid.read_bytes() != standby_ppm.read_bytes()
+    status.write_text('MTSTATUS1\nmode=STANDBY\nfault=NONE\n')
+    os.utime(status, (1, 1))
+    stale = tmp / 'stale.ppm'
+    assert run([str(binary), '--preview', str(stale),
+                '--status-file', str(status)], env=env).returncode == 0
+    assert stale.read_bytes() != standby_ppm.read_bytes(), 'stale feed must fail closed'
+    assert run([str(binary), '--preview', str(stale),
+                '--status-file', 'relative.path'], env=env).returncode == 2
+    print('PASS status UI: Russian labels, standby, voice not verified, fault banner, stale/invalid feed')
+
     # Verify exact SPI window coordinates, byte order and retained pixels using mocks.
     spi_test = tmp/'spi-check'
     result = run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
