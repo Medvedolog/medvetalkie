@@ -60,6 +60,55 @@ If red and blue are swapped, rerun with `/root/st7789-test --bgr`. This is a
 manual visual test: successful SPI writes do not prove an attached/working LCD.
 The tool does not install services, enable autostart or change boot settings.
 
+
+## Bjorni screensaver with live clock
+
+Run the self-contained launcher on the wired, verified display:
+
+```sh
+bash platform/display/medvetalkie-screensaver.sh
+```
+
+It compiles the embedded C renderer with the installed compiler and decodes the
+embedded 35-frame animation from the Bjorni GIF supplied by the project owner.
+No Python, image libraries or asset downloads are needed on the SBC. The cropped
+bear appears on a true black background, with a periodically tossed star or
+mushroom, rotating rainbow pinwheel and moving white sweep for visual inspection
+of trailing/jerky motion. The clock uses current system wall time, including
+seconds, date and the system timezone; animation timing uses a monotonic clock.
+
+The launcher checks HTTPS server time at startup and every 15 minutes, using
+`http://192.168.11.100:10880` by default. A green `SYNC` indicator means the latest
+check succeeded; amber `LOCAL` means it failed or was disabled. Failed HTTP
+responses, stale cached headers and invalid dates never set the clock. This is
+a seconds-resolution HTTPS time check, not a precision NTP measurement. Override
+the proxy with `MEDVETALKIE_PROXY` and timezone with `MEDVETALKIE_TZ` (for example,
+`Europe/Moscow`), or use `--no-sync` to leave the system clock alone.
+
+The renderer retains the verified **1 MHz** SPI speed and sends only changed
+16x16 tile runs. The displayed FPS and average SPI transfer milliseconds describe
+the software/transfer cadence; they do not measure panel response time or actual
+input-to-photon latency. The animation targets up to 10 FPS, subject to SPI
+throughput. Continuous animation still needs confirmation on the physical panel.
+
+Press **Ctrl+C** to stop, turn the display off and release GPIO. The time-check
+worker is also stopped. No services or autostart entries are installed. Use
+`--bgr` only if red/blue are swapped. Exit the bench colour-bar test before
+starting the screensaver; both programs use the same GPIO lines.
+
+Host preview, regeneration and checks:
+
+```sh
+bash platform/display/medvetalkie-screensaver.sh --preview /tmp/bjorni.ppm --frame 8.9
+python3 platform/display/screensaver/build-launcher.py
+python3 platform/display/screensaver/test-screensaver.py
+```
+
+Preview mode does not open GPIO/SPI, use the network or set the clock. Renderer,
+launcher template and packed sprites are in `platform/display/screensaver/`.
+`import-bjorni.py` reproduces the packed asset from the owner's original GIF
+using Pillow on the build host; rerun `build-launcher.py` after source/asset changes.
+
 ## Hardware observations, 2026-11-24
 
 - Operator confirmed boot of the stock USB-BT image; `uname -r` reports
