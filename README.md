@@ -50,7 +50,7 @@ in [docs/IPC.md](docs/IPC.md), not the finished settings interface.
 For a development machine with dependencies installed:
 
 ```sh
-sudo apt-get install -y build-essential cmake libjson-c-dev libsqlite3-dev libcivetweb-dev curl
+sudo apt-get install -y build-essential cmake libjson-c-dev libsqlite3-dev libdbus-1-dev pkg-config libcivetweb-dev curl
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 2
 ctest --test-dir build --output-on-failure
@@ -64,8 +64,11 @@ mkdir -p /tmp/medvetalkie-api
 Open `http://127.0.0.1:8765/` **on that same machine**. HTTP is limited to
 loopback and serves `/api/v1/health`, `/api/v1/status`,
 `/api/v1/capabilities`, `/api/v1/settings`, `/api/v1/display` and
-`/api/v1/bt/controllers`. The controller inventory is **kernel sysfs only**:
-it does not check BlueZ D-Bus/HFP/SCO or pair a headset. No remote listener, login or modification endpoints
+`/api/v1/bt/controllers` and `/api/v1/bt/bluez`.
+The controller inventory is **kernel sysfs only**; the separate BlueZ
+endpoint reports observed `Adapter1` / `Device1` states (`Powered`, `Paired`,
+`Connected`) from system D-Bus. Neither endpoint proves HFP/SCO audio or
+pairs a headset. No remote listener, login or modification endpoints
 exist; **do not bind it to LAN/0.0.0.0 or proxy it to an untrusted network**.
 The IPC server authorizes only same-UID clients for now. To enable the
 local SQLite `settings.patch` operation (never over HTTP), start core
@@ -89,6 +92,10 @@ The script path must point to an explicitly installed trusted copy of
 the Bjorni renderer. The adapter runs it only with `--run` and when
 `screensaver_enabled=true`; it does not install the script, manage
 services, or implement hot reload. No integrated hardware run is claimed.
+
+The BlueZ source uses native `libdbus-1-dev` in addition to the existing
+C11, SQLite and CivetWeb dependencies. The WebUI is still bound to localhost
+with no LAN access or authentication; never reverse-proxy it publicly.
 
 The physical display, bootable Armbian image and USB-BT bench work are in
 the separate `work/uwe5622-wifi-armbian` branch. These branches have **not**
