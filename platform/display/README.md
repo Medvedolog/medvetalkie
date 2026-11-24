@@ -132,6 +132,73 @@ launcher template and packed sprites are in `platform/display/screensaver/`.
 `import-bjorni.py` reproduces the packed asset from the owner's original GIF
 using Pillow on the build host; rerun `build-launcher.py` after source/asset changes.
 
+## Unified ST7789 status screen and Bjorni standby
+
+The **same** C11 renderer holds SPI/GPIO while displaying either the
+dashboard or Bjorni animation. Never start two independent SPI display
+processes. The display remains independent of the audio process.
+
+The optional `--status-file` argument (or `MEDVETALKIE_STATUS_FILE`)
+enables a small 320x240 Russian-labelled dashboard. It shows:
+mode; headset 1/2 role state; voice link; network; USB-BT/ACL counts;
+radio availability; battery or a critical fault. **Headset battery, RSSI,
+volume and actual audio profile are not yet published by Core Alpha**;
+their absence must not be presented as good reception or charged batteries.
+On the current API, headset roles are UNASSIGNED and voice is
+NOT_VERIFIED; HFP_READY is forbidden until microphone, playback and SCO
+are verified on the real board.
+
+When an atomically refreshed status feed reports `mode=STANDBY` and
+`fault=NONE`, display the dashboard for 8 seconds after startup or a
+state change, then return to the animated Bjorni clock. Any active
+mode, pairing, fault, absent or stale feed pins the status screen. The
+status screen refreshes at approximately 2 FPS to reduce SPI overhead;
+standby animation retains its configured 25 FPS ceiling. No other process
+takes SPI ownership during transitions.
+
+The transport is a local, versioned `MTSTATUS1` text snapshot written
+atomically to an owner-private file. It is a **display-only adapter**,
+not a second command API:
+
+```text
+MTSTATUS1
+mode=STANDBY
+headset1=UNASSIGNED
+headset2=UNASSIGNED
+voice=NOT_VERIFIED
+network=LAN
+radio=NOT_AVAILABLE
+battery=UNKNOWN
+fault=NONE
+bt_usb=2
+bt_connected=0
+```
+
+The format admits only whitelisted enum values and two bounded counts.
+Malformed, missing or older-than-12-second data fails closed to
+`CORE_OFFLINE`, not a retained READY state. It contains no Bluetooth
+MAC addresses, passwords, paths, names or arbitrary user text. The
+separate `medvetalkie-display-status` producer on
+`feature/web-alpha-usb-diagnostics` queries the Core Unix IPC,
+system status, passive USB count and BlueZ connected ACL count and
+publishes this file. ACL connection is **not** HFP-ready voice.
+
+For a local **preview** without GPIO, display or time synchronization:
+
+```sh
+printf 'MTSTATUS1\nmode=STANDBY\nheadset1=UNASSIGNED\nheadset2=UNASSIGNED\nvoice=NOT_VERIFIED\nnetwork=LAN\nradio=NOT_AVAILABLE\nbattery=UNKNOWN\nfault=NONE\nbt_usb=2\nbt_connected=0\n' > /tmp/medvetalkie-status-test
+bash platform/display/medvetalkie-screensaver.sh --no-sync \
+  --status-file /tmp/medvetalkie-status-test \
+  --preview /tmp/medvetalkie-status.ppm
+```
+
+**Do not enable at boot yet.** The Core API producer and this renderer
+currently reside in different development branches; no integrated
+Armbian image or physical Bjorni/status switching test has been performed.
+Use a single Core/settings/display service bundle only after synchronizing
+these branches and validating on Orange Pi Zero 3. The old no-status-file
+launch command continues to behave exactly as before.
+
 ## Hardware observations, 2026-11-24
 
 - Operator confirmed boot of the stock USB-BT image; `uname -r` reports
