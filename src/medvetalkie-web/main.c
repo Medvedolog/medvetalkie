@@ -77,6 +77,8 @@ static int index_handler(struct mg_connection *conn, void *unused)
         "<h2>Сохранённые настройки</h2><pre id=\"settings\">Загрузка…</pre>"
         "<h2>Bluetooth / USB-контроллеры</h2><pre id=\"bt\">Загрузка…</pre>"
         "<small>HCI/USB обнаружение не означает готовность HFP.</small>"
+        "<h2>BlueZ / сопряжённые устройства</h2><pre id=\"bluez\">Загрузка…</pre>"
+        "<small>Состояние Connected не подтверждает голосовую связь.</small>"
         "<script>async function show(id,url){try{const r=await fetch(url,"
         "{cache:'no-store'});const d=await r.json();"
         "document.getElementById(id).textContent=JSON.stringify(d,null,2)"
@@ -85,7 +87,8 @@ static int index_handler(struct mg_connection *conn, void *unused)
         "show('status','/api/v1/status');"
         "show('caps','/api/v1/capabilities');"
         "show('settings','/api/v1/settings');"
-        "show('bt','/api/v1/bt/controllers');</script></html>";
+        "show('bt','/api/v1/bt/controllers');"
+        "show('bluez','/api/v1/bt/bluez');</script></html>";
     (void)unused;
     if (!method_is_get(conn))
         return send_response(conn, 405, "Method Not Allowed", "application/json",
@@ -135,6 +138,8 @@ int main(int argc, char **argv)
                            json_handler, (void *)"display.status");
     mg_set_request_handler(context, "/api/v1/bt/controllers",
                            json_handler, (void *)"bt.controllers");
+    mg_set_request_handler(context, "/api/v1/bt/bluez",
+                           json_handler, (void *)"bt.bluez");
     while (!stop_requested) sleep(1);
     mg_stop(context);
     return 0;
