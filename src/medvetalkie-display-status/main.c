@@ -26,17 +26,17 @@ typedef struct {
     unsigned usb, connected;
 } status_snapshot;
 
-static int known_mode(const char *mode)
+static const char *known_mode(const char *mode)
 {
     static const char *const modes[]={
         "STANDBY","INTERCOM","PAIRING","DEGRADED","ERROR",
         "SOLO_STEREO","ANDROID_MEDIA","ANDROID_BRIDGE_CALL",
         "PHONE_DIRECT","RADIO","GAME","STARTING","BOOT"
     };
-    if(!mode)return 0;
+    if(!mode)return NULL;
     for(size_t i=0;i<sizeof(modes)/sizeof(*modes);++i)
-        if(!strcmp(mode,modes[i]))return 1;
-    return 0;
+        if(!strcmp(mode,modes[i]))return modes[i];
+    return NULL;
 }
 
 /* Check for assigned non-loopback IPv4, not internet connectivity.
@@ -119,7 +119,8 @@ static void collect(const char *socket_path,status_snapshot *s)
        json_object_is_type(state,json_type_object)){
         const char *effective=string_field(state,"effective_mode");
         const char *desired=string_field(state,"desired_mode");
-        if(known_mode(effective))s->mode=effective;
+        const char *canonical=known_mode(effective);
+        if(canonical)s->mode=canonical;
         else if(effective && !strcmp(effective,"UNKNOWN") &&
                 desired && !strcmp(desired,"UNSET"))
             s->mode="STANDBY"; /* UI idle only: NOT INTERCOM/HFP readiness. */
@@ -177,8 +178,9 @@ static int publish(const char *path,const status_snapshot *s)
     }
     out=fdopen(fd,"w");
     if(!out){close(fd);unlink(tmp);return -1;}
-    int ok=fwrite(payload,1,(size_t)len,out)==(size_t)len &&
-           fflush(out)==0 && fsync(fd)==0 && fclose(out)==0;
+    int ok=fwrite(payload,1,(size_t)len,out)==(size_t)len;
+    if(fflush(out)!=0 || fsync(fd)!=0)ok=0;
+    if(fclose(out)!=0)ok=0;
     if(!ok){unlink(tmp);return -1;}
     if(rename(tmp,path)!=0){unlink(tmp);return -1;}
     return 0;
