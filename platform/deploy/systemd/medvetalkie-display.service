@@ -1,0 +1,20 @@
+# Managed by MedveTalkie installer
+[Unit]
+Description=MedveTalkie Russian status dashboard and Bjorni ST7789
+After=medvetalkie-status.service
+Wants=medvetalkie-status.service
+ConditionPathExists=/dev/spidev1.0
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/bash /opt/medvetalkie/current/medvetalkie-screensaver.sh --no-sync --spi-mhz 4 --fps 25 --status-file /run/medvetalkie/display.status
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=8
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
