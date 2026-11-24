@@ -8,6 +8,8 @@ MedveTalkie is a modular motorcycle/bicycle intercom prototype built around an O
 
 The current priority is **proving stable HFP microphone + speaker operation on real hardware**, not shipping an untested product.
 
+**Development handoff:** [docs/HANDOFF.md](docs/HANDOFF.md) — current branches, test coverage, simulated vs real-hardware validation, display status integration and next gates. Update it with each substantive iteration.
+
 ## System overview
 
 ![MedveTalkie detailed prototype architecture](docs/assets/medvetalkie-architecture-en.svg)
