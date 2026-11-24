@@ -85,11 +85,28 @@ a seconds-resolution HTTPS time check, not a precision NTP measurement. Override
 the proxy with `MEDVETALKIE_PROXY` and timezone with `MEDVETALKIE_TZ` (for example,
 `Europe/Moscow`), or use `--no-sync` to leave the system clock alone.
 
-The renderer retains the verified **1 MHz** SPI speed and sends only changed
-16x16 tile runs. The displayed FPS and average SPI transfer milliseconds describe
-the software/transfer cadence; they do not measure panel response time or actual
-input-to-photon latency. The animation targets up to 10 FPS, subject to SPI
-throughput. Continuous animation still needs confirmation on the physical panel.
+The default remains the verified **1 MHz** SPI speed. The operator confirmed
+that the first screensaver version ran on the panel at about **3 FPS**. The
+optimized renderer trims unchanged edges from changed tile runs and packs pixels
+across rows into writes up to the driver's reported buffer size (maximum 4096
+bytes). In a 30-frame host protocol test, pixel payload fell from 914944 to
+526440 bytes (42%); this is a software sample, not a hardware FPS measurement.
+The displayed FPS and average SPI transfer milliseconds describe the actual
+software/transfer cadence; they do not measure panel response time or actual
+input-to-photon latency. The animation now targets up to 25 FPS, subject to SPI
+throughput. Initial display setup still runs at 1 MHz before selecting the
+requested animation speed.
+
+Try `bash platform/display/medvetalkie-screensaver.sh --spi-mhz 4`, then 8 MHz
+only after checking for correct colours and stable output. `--fps N` selects a
+1–60 FPS ceiling. `MEDVETALKIE_SPI_MHZ=4` and `MEDVETALKIE_FPS=25` provide the
+same settings through cron's environment, without changing its command lines.
+CLI options override environment settings. SPI accepts integer MHz values 1–16;
+faster modes are not yet confirmed on the operator's panel/wires. Return to 1
+MHz if output is corrupted. Changing speed is per process; no overlay or boot
+configuration change is required. The displayed MHz is the requested setting,
+not a measurement of the physical clock. The original GIF itself has 280 ms
+frames; the spinner, throws, sweep and clock update independently.
 
 Press **Ctrl+C** to stop, turn the display off and release GPIO. The time-check
 worker is also stopped. No services or autostart entries are installed. Use

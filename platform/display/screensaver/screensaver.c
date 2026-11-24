@@ -11,6 +11,8 @@ static uint16_t pixels[WIDTH * HEIGHT], previous[WIDTH * HEIGHT];
 static uint16_t sprites[35][80 * 112];
 static volatile sig_atomic_t stopping;
 static double last_fps, last_spi_ms;
+static unsigned spi_mhz = 1, target_fps = 25;
+static size_t pixel_chunk = 1024;
 static const double pi = 3.14159265358979323846;
 static void stop_requested(int signum) { (void)signum; stopping = 1; }
 
@@ -226,28 +228,38 @@ static void render(double t, time_t wall, int synced)
     text(20,151,stats,1,white);
     snprintf(stats,sizeof(stats),"SPI %3.0fMS",last_spi_ms);
     text(20,164,stats,1,rgb(140,170,195));
+    snprintf(stats,sizeof(stats),"%u MHZ",spi_mhz);
+    text(20,177,stats,1,rgb(140,170,195));
     for (int x=10;x<310;x+=10) rect(x,220,1,x%50==10?6:3,rgb(45,65,85));
     double p=fmod(t*1.4,2.0); if(p>1)p=2-p;
     int sx=12+(int)(292*p);
     rect(sx,214,4,14,white);
     rect(12,232,296,1,rgb(40,55,70));
 }
-/* Compare 16x16 tiles, merging adjacent changed tiles before SPI transfers.
- * Keep the already verified 1 MHz; no higher bus speed is assumed working.
+/* Compare 16x16 tiles, merging adjacent changed tiles and trimming unchanged
+ * edges. Pack pixels across rows to reduce spidev write/syscall overhead.
  */
+static void send_pixel_block(const uint8_t *data, size_t length)
+{
+    ssize_t sent;
+    do { sent=write(spi_fd,data,length); } while(sent<0 && errno==EINTR);
+    if(sent<0)die("SPI pixel write");
+    if((size_t)sent!=length){errno=EIO;die("Short SPI pixel write");}
+}
 static void send_rect(int x, int y, int w, int h)
 {
     uint8_t columns[]={(uint8_t)(x>>8),(uint8_t)x,(uint8_t)((x+w-1)>>8),(uint8_t)(x+w-1)};
     uint8_t rows[]={(uint8_t)(y>>8),(uint8_t)y,(uint8_t)((y+h-1)>>8),(uint8_t)(y+h-1)};
     command(0x2a,columns,4); command(0x2b,rows,4); command(0x2c,NULL,0);
-    uint8_t row[WIDTH*2];
+    uint8_t block[4096];size_t used=0;
     for(int j=y;j<y+h;++j) {
         for(int i=0;i<w;++i) {
             uint16_t p=pixels[j*WIDTH+x+i];
-            row[2*i]=(uint8_t)(p>>8);row[2*i+1]=(uint8_t)p;
+            block[used++]=(uint8_t)(p>>8);block[used++]=(uint8_t)p;
+            if(used==pixel_chunk){send_pixel_block(block,used);used=0;}
         }
-        send_bytes(row,(size_t)w*2);
     }
+    if(used)send_pixel_block(block,used);
 }
 static int tile_changed(int tx, int ty)
 {
@@ -263,7 +275,16 @@ static void refresh(int first)
             if(!tile_changed(x,y)){x+=16;continue;}
             int start=x;
             do{x+=16;}while(x<WIDTH && tile_changed(x,y));
-            send_rect(start,y,x-start,16);
+            int left=x,right=start-1,top=y+16,bottom=y-1;
+            for(int j=y;j<y+16;++j)
+                for(int i=start;i<x;++i)
+                    if(pixels[j*WIDTH+i]!=previous[j*WIDTH+i]) {
+                        if(i<left)left=i;
+                        if(i>right)right=i;
+                        if(j<top)top=j;
+                        if(j>bottom)bottom=j;
+                    }
+            if(right>=left)send_rect(left,top,right-left+1,bottom-top+1);
         }
     }
     memcpy(previous,pixels,sizeof(pixels));
@@ -287,19 +308,40 @@ static void ppm(const char *path)
     }
     if(fclose(file))die("Close preview");
 }
+static unsigned setting(const char *value, unsigned max, const char *name)
+{
+    if(!value || !*value){fprintf(stderr,"Missing %s\n",name);exit(2);}
+    for(const char *p=value;*p;++p)
+        if(*p<'0' || *p>'9'){fprintf(stderr,"Invalid %s: %s\n",name,value);exit(2);}
+    char *end;errno=0;unsigned long number=strtoul(value,&end,10);
+    if(errno || *end || number<1 || number>max) {
+        fprintf(stderr,"%s must be between 1 and %u\n",name,max);exit(2);
+    }
+    return (unsigned)number;
+}
+#ifndef SCREENSAVER_TEST
 int main(int argc,char **argv)
 {
     int bgr=0;const char *preview=NULL,*asset=getenv("MEDVETALKIE_SPRITE");
     double frame=0;
+    const char *mhz_env=getenv("MEDVETALKIE_SPI_MHZ"),*fps_env=getenv("MEDVETALKIE_FPS");
+    if(mhz_env)spi_mhz=setting(mhz_env,16,"SPI MHz");
+    if(fps_env)target_fps=setting(fps_env,60,"FPS limit");
     for(int i=1;i<argc;++i) {
         if(!strcmp(argv[i],"--bgr"))bgr=1;
         else if(!strcmp(argv[i],"--no-sync"))continue; /* launcher handles this */
         else if(!strcmp(argv[i],"--preview") && i+1<argc)preview=argv[++i];
+        else if(!strcmp(argv[i],"--spi-mhz") && i+1<argc)
+            spi_mhz=setting(argv[++i],16,"SPI MHz");
+        else if(!strcmp(argv[i],"--fps") && i+1<argc)
+            target_fps=setting(argv[++i],60,"FPS limit");
         else if(!strcmp(argv[i],"--frame") && i+1<argc) {
             char *end;frame=strtod(argv[++i],&end);
             if(*end || !isfinite(frame) || frame<0 || frame>86400){fputs("Invalid frame time\n",stderr);return 2;}
         } else if(!strcmp(argv[i],"--help")) {
-            puts("Bjorni screensaver: --bgr, --no-sync, --preview FILE.ppm --frame SECONDS\n"
+            puts("Bjorni screensaver: --bgr, --no-sync, --spi-mhz N, --fps N\n"
+                 "Defaults: 1 MHz SPI (verified wiring), up to 25 FPS. Try 4 MHz first.\n"
+                 "--preview FILE.ppm --frame SECONDS renders without GPIO/SPI.\n"
                  "Uses current local system time. Ctrl+C stops and releases GPIO.\n"
                  "MEDVETALKIE_PROXY sets the HTTPS time-sync proxy (launcher).\n"
                  "MEDVETALKIE_TZ overrides the local timezone, e.g. Europe/Moscow.");return 0;
@@ -319,6 +361,17 @@ int main(int argc,char **argv)
        ioctl(spi_fd,SPI_IOC_WR_LSB_FIRST,&lsb)<0 || ioctl(spi_fd,SPI_IOC_WR_MAX_SPEED_HZ,&speed)<0)
         die("Configure SPI");
     request_controls();display_init(bgr);
+    speed=spi_mhz*1000000u;
+    if(ioctl(spi_fd,SPI_IOC_WR_MAX_SPEED_HZ,&speed)<0)die("Set requested SPI speed");
+    FILE *buffer_info=fopen("/sys/module/spidev/parameters/bufsiz","r");
+    if(buffer_info) {
+        unsigned available=0;
+        if(fscanf(buffer_info,"%u",&available)==1 && available>=2)
+            pixel_chunk=available>=4096 ? 4096 : (available & ~1u);
+        fclose(buffer_info);
+    }
+    printf("SPI requested %u MHz, pixel chunks %zu bytes, FPS limit %u\n",
+           spi_mhz,pixel_chunk,target_fps);fflush(stdout);
     puts("Bjorni + live clock. HTTPS time check every 15 minutes. Ctrl+C to stop.");
     double start=monotonic_seconds(), report=start, spi_total=0;
     unsigned frames=0;int first=1;
@@ -331,7 +384,7 @@ int main(int argc,char **argv)
             last_fps=frames/(end-report);last_spi_ms=1000*spi_total/frames;
             report=end;spi_total=0;frames=0;
         }
-        double delay=.100-(monotonic_seconds()-begin);
+        double delay=1.0/target_fps-(monotonic_seconds()-begin);
         if(delay>0) {
             struct timespec nap={(time_t)delay,(long)((delay-floor(delay))*1e9)};
             (void)nanosleep(&nap,NULL);
@@ -340,3 +393,4 @@ int main(int argc,char **argv)
     command(0x28,NULL,0); /* display off; BLK remains wired to 3.3 V */
     return 0;
 }
+#endif

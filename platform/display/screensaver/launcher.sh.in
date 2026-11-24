@@ -9,7 +9,9 @@ for arg in "$@"; do
         --help)
             cat <<'HELP'
 Bjorni screensaver for Orange Pi Zero 3 + MSP2008/ST7789.
-Run: bash medvetalkie-screensaver.sh [--bgr] [--no-sync]
+Run: bash medvetalkie-screensaver.sh [--spi-mhz 4] [--fps 25] [--bgr] [--no-sync]
+Default SPI: 1 MHz. Faster wiring trials: 4, then 8 MHz; return to 1 for artifacts.
+MEDVETALKIE_SPI_MHZ and MEDVETALKIE_FPS also set these options (including cron).
 Stop: Ctrl+C. No autostart is installed.
 Time: system local timezone; HTTPS check at startup and every 15 minutes.
 MEDVETALKIE_PROXY defaults to http://192.168.11.100:10880.

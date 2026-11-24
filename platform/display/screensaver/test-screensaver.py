@@ -38,6 +38,29 @@ with tempfile.TemporaryDirectory(prefix='medvetalkie-saver-check-') as temp:
                env=dict(env, MEDVETALKIE_SPRITE=str(broken))).returncode == 1
     print('PASS render: star/mushroom/animation frames, black background, bright clock, invalid input')
 
+    # Verify exact SPI window coordinates, byte order and retained pixels using mocks.
+    spi_test = tmp/'spi-check'
+    result = run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+                  '-Wno-unused-function', '-Wno-unused-variable', '-O2',
+                  str(ROOT/'test-spi-refresh.c'), '-lm',
+                  '-Wl,--wrap=write,--wrap=ioctl', '-o', str(spi_test)])
+    assert result.returncode == 0, result.stderr
+    result = run([str(spi_test), str(asset)])
+    assert result.returncode == 0, result.stderr
+    print(result.stdout.strip())
+    for option, value in [('--spi-mhz','4'),('--spi-mhz','8'),('--fps','25'),('--fps','60')]:
+        result = run([str(binary), '--preview', str(preview), option, value], env=env)
+        assert result.returncode == 0, result.stderr
+    for option, value in [('--spi-mhz','0'),('--spi-mhz','17'),('--spi-mhz','4.5'),
+                          ('--spi-mhz','oops'),('--fps','0'),('--fps','61')]:
+        assert run([str(binary), '--preview', str(preview), option, value], env=env).returncode == 2
+    assert run([str(binary), '--preview', str(preview)],
+               env=dict(env,MEDVETALKIE_SPI_MHZ='8',MEDVETALKIE_FPS='30')).returncode == 0
+    assert run([str(binary), '--preview', str(preview)],
+               env=dict(env,MEDVETALKIE_SPI_MHZ='bad')).returncode == 2
+    print('PASS settings: SPI/FPS options, cron environment and invalid values')
+
+
     # A failed HTTPS status must never set time even when it carries a Date.
     tools = tmp/'bin'
     tools.mkdir()
