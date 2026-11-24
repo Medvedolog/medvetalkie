@@ -140,7 +140,8 @@ are exposed. The in-memory snapshot is capped at 16 adapters
 and 96 devices with an explicit `truncated` flag.
 
 If the system D-Bus, `org.bluez`, or its method response is missing,
-invalid or times out, the query returns `NOT_READY`, **not**
+invalid or times out, the core query returns `NOT_READY` and the
+read-only HTTP adapter returns **503 Service Unavailable**, **not**
 an invented empty connected-device list or working HFP status.
 The existing `bt.controllers` endpoint remains kernel-sysfs-only;
 adapter HCI-to-USB identity assignment and actual HFP/PipeWire
