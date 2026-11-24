@@ -7,6 +7,7 @@
 #include "medvetalkie/settings.h"
 #include "settings_api.h"
 #include "bt_inventory.h"
+#include "bt_bluez.h"
 
 #include <errno.h>
 #include <json-c/json.h>
@@ -183,6 +184,7 @@ static json_object *process_request(const char *input, size_t size)
         json_object_object_add(capabilities, "web_read_only", json_object_new_boolean(1));
         json_object_object_add(capabilities, "bluetooth_management", json_object_new_boolean(0));
         json_object_object_add(capabilities, "bt_controller_inventory", json_object_new_boolean(1));
+        json_object_object_add(capabilities, "bt_bluez_observation", json_object_new_boolean(1));
         json_object_object_add(capabilities, "hfp_audio", json_object_new_boolean(0));
         json_object_object_add(capabilities, "ble_gatt", json_object_new_boolean(0));
         json_object_object_add(capabilities, "settings_read", json_object_new_boolean(settings_enabled));
@@ -192,6 +194,8 @@ static json_object *process_request(const char *input, size_t size)
         json_object_object_add(reply, "capabilities", capabilities);
     } else if (strcmp(action, "bt.controllers") == 0) {
         reply = mt_bt_controllers(bluetooth_sysfs_root);
+    } else if (strcmp(action, "bt.bluez") == 0) {
+        reply = mt_bluez_query();
     } else {
         reply = mt_core_settings_query(settings_enabled ? &settings_store : NULL, action);
         if (!reply) {
@@ -360,6 +364,11 @@ int main(int argc, char **argv)
             return 1; /* Never silently fall back to volatile settings. */
         }
         settings_enabled = 1;
+    }
+    if (!dbus_threads_init_default()) {
+        fputs("Cannot initialize D-Bus thread support\n", stderr);
+        if (settings_enabled) mt_settings_close(&settings_store);
+        return 1;
     }
     result = ipc_server(socket_path);
     if (settings_enabled) mt_settings_close(&settings_store);
