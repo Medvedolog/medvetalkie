@@ -5,6 +5,7 @@ core=$2
 work=$(mktemp -d)
 socket_path="$work/core.sock"
 db_path="$work/settings.db"
+mkdir -p "$work/sys/class/bluetooth"
 core_pid=
 web_pid=
 cleanup() {
@@ -28,7 +29,7 @@ done
 code=$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' --max-time 2 "$url/api/v1/health")
 [ "$code" = 503 ] || { echo "expected 503 without core; got $code" >&2; exit 1; }
 
-"$core" --ipc-socket "$socket_path" --db-path "$db_path" >"$work/core.log" 2>&1 &
+"$core" --ipc-socket "$socket_path" --db-path "$db_path" --bluetooth-sysfs-root "$work/sys" >"$work/core.log" 2>&1 &
 core_pid=$!
 i=0
 while [ "$i" -lt 40 ]; do
@@ -42,6 +43,8 @@ curl --noproxy '*' --silent --fail --max-time 2 "$url/api/v1/status" | grep -q '
 curl --noproxy '*' --silent --fail --max-time 2 "$url/api/v1/capabilities" | grep -q '"hfp_audio":false'
 curl --noproxy '*' --silent --fail --max-time 2 "$url/api/v1/settings" | grep -q '"device_name":"MedveTalkie"'
 curl --noproxy '*' --silent --fail --max-time 2 "$url/api/v1/display" | grep -q '"hardware_applied":false'
+curl --noproxy '*' --silent --fail --max-time 2 "$url/api/v1/bt/controllers" | grep -q '"controller_count":0'
+curl --noproxy '*' --silent --fail --max-time 2 "$url/api/v1/bt/controllers" | grep -q '"bluez_state":"NOT_CHECKED"'
 code=$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' --max-time 2 \
        -X POST "$url/api/v1/health")
 [ "$code" = 405 ] || { echo "POST should be rejected: $code" >&2; exit 1; }
