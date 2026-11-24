@@ -29,7 +29,7 @@
                     headset 1   headset 2
 ```
 
-The HTTP server will live within the core in the first iteration. This deliberately means an eventual core-process crash also removes the web UI; **HTTP and core are not failure isolated from one another**. If that causes issues in practice, extracting `medvetalkie-web` requires no new domain protocol because IPC is already defined.
+CivetWeb now runs in a separate `medvetalkie-web` process, strictly bound to loopback in the development build. It proxies read-only health, system status, capabilities, settings and BlueZ observation via the versioned Unix IPC in `medvetalkied`. Its HTTP response failures cannot terminate the core process. Authentication and network-exposed controls remain unimplemented; never proxy the Alpha UI onto an untrusted LAN. The display's status producer and SPI renderer are separate non-audio processes sharing only a small versioned status snapshot; the sole renderer owns GPIO/SPI.
 
 No audio sample traffic travels through the Unix IPC control protocol. A separate PipeWire routing helper could be introduced if required after hardware validation; do not add processes without a measured reason.
 
