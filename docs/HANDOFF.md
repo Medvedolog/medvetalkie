@@ -85,3 +85,50 @@ The technical-spec baseline is [MedveTalkie TZ v1.4](MedveTalkie_TZ_v1.4.md), es
 - Reconciled `docs/IPC.md`, architecture description, TZ v1.4 appendices, and README. Independent source branch/PR retained only temporarily until green CI confirms integration.
 - **Combined CI gate PASSED:** [run 45484817825](https://github.com/Medvedolog/medvetalkie/actions/runs/45484817825) — 10/10 CTest and separate Bjorni renderer regressions. **Next gate: physical Orange Pi** with a single SPI owner, UGREEN/BlueZ, Bjorni/status transitions. Live Orange Pi and `main` were not modified.
 
+
+## 9. In-place Armbian deployment through mixed proxy — 2026-11-24
+
+- Added one installer in the existing branch:
+  [platform/deploy/install-opiz3.sh](../platform/deploy/install-opiz3.sh).
+  Canonical operator instructions:
+  [platform/deploy/README.md](../platform/deploy/README.md).
+- A Clash/mihomo **mixed listener** is used through its **HTTP** proxy endpoint.
+  Default borrowed from the existing Bjorni configuration:
+  http://192.168.11.100:10880. Override with --proxy. No global proxy,
+  permanent APT configuration or local API proxying. For git clone/pull,
+  explicitly use git -c http.proxy=URL outside the installer.
+- Installer supports default **read-only --dry-run**, real --apply, and
+  **--simulate ABS_PATH** to build/test and stage an installation into
+  a temporary filesystem with no root, APT or live systemd changes.
+  Versioned releases are stored under /opt/medvetalkie/releases with
+  current/previous pointers; systemd units are backed up before activation
+  and failed activation attempts restore the managed definitions/pointer.
+  Explicit --rollback selects the previous managed release.
+- Service split: medvetalkie-core, medvetalkie-status and medvetalkie-web
+  run as a dedicated non-login medvetalkie user. Core owns the private
+  RuntimeDirectory/StateDirectory, status has only the explicit runtime
+  snapshot WritePath. The renderer runs as root solely because the
+  standalone ST7789 script requires SPI/GPIO and is **opt-in**
+  (--enable-display). It does not replace or kill unmanaged SPI processes.
+  Read-only Web Alpha remains 127.0.0.1:8765 only.
+- The new unit files do not change kernel modules, built-in radio blacklist,
+  Ethernet configuration, BlueZ pairings or /boot. The renderer is
+  explicitly started with --no-sync and fixed previously tested 4 MHz/25 FPS.
+  The desired SQLite settings do **not** yet apply live to the display.
+- **CI validated:** [combined Actions run 45485960174](https://github.com/Medvedolog/medvetalkie/actions/runs/45485960174)
+  passed CMake build, all **10/10 CTest** suites, standalone
+  Bjorni/ST7789 regressions, and the new
+  tests/test_deploy_installer.py: proxy argument validation, dry-run,
+  staged installation of actual binaries + systemd files, second release,
+  rollback, and refusal to overwrite unmanaged units.
+- **NOT physically validated:** no installer execution yet on the
+  operator's actual Orange Pi Zero 3. Before enabling renderer, stop the
+  old manually launched Bjorni and verify /dev/spidev1.0 ownership.
+  Verify systemctl status, health endpoint, status file, 8-second idle
+  transition, real two UGREEN controller inventory, no repeated
+  Bluetooth disconnects, and stable wired LAN. HFP/SCO still unverified.
+  Do not claim physical readiness or merge to main on CI alone.
+- Continue with **one** active branch work/uwe5622-wifi-armbian; no new
+  integration branches. Update this handoff after first physical trial
+  with actual command output, observed failures, and rollback decision.
+
