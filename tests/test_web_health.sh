@@ -47,7 +47,9 @@ curl --noproxy '*' --silent --fail --max-time 2 "$url/api/v1/bt/controllers" | g
 curl --noproxy '*' --silent --fail --max-time 2 "$url/api/v1/bt/controllers" | grep -q '"bluez_state":"NOT_CHECKED"'
 # On GitHub CI there is no running BlueZ; explicitly report unavailable,
 # do not fabricate an empty successful object list or HFP-ready headset.
-curl --noproxy '*' --silent --fail --max-time 2 "$url/api/v1/bt/bluez" | grep -q '"code":"NOT_READY"'
+code=$(curl --noproxy '*' --silent --output "$work/bluez.json" --write-out '%{http_code}' --max-time 2 "$url/api/v1/bt/bluez")
+[ "$code" = 503 ] || { echo "BlueZ must report HTTP 503 offline: $code" >&2; exit 1; }
+grep -q '"code":"NOT_READY"' "$work/bluez.json"
 code=$(curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}' --max-time 2 \
        -X POST "$url/api/v1/health")
 [ "$code" = 405 ] || { echo "POST should be rejected: $code" >&2; exit 1; }
