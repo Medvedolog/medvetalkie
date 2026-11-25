@@ -773,3 +773,15 @@ Operator ran `diagnose-hfp-prereqs.sh` twice on Orange Pi Zero 3, kernel `6.18.6
 User directed that the **next full Armbian image** contain the complete Bluetooth HFP audio prerequisite stack by default. TZ v1.4 §28 and `platform/armbian-image/README.md` now require PipeWire, pipewire-pulse, WirePlumber, Bluetooth SPA, diagnostic tools, an unprivileged persistent headless audio user session, reliable verified APT and separate build/boot/hardware audio gates. Both UGREEN remain USB-based; do not regress ST7789, Core, network, blacklist or rollback.
 
 **Not implemented in the image build scripts yet.** A documentation requirement is not a working build. Next engineering task: integrate the package set + user-systemd provisioning in the image recipe, add rootfs/boot smoke checks, then confirm on the physical OPiZ3. Do not claim actual HFP/SCO/full-duplex until hardware proof.
+
+
+## Physical OPiZ3 PipeWire/WirePlumber bring-up — 2026-11-25
+
+Operator supplied actual post-install output from the physical Orange Pi Zero 3 (kernel `6.18.64-current-sunxi64`):
+
+- User manager started for `medvetalkie` (on this board UID 1000), user `pipewire.socket`, `pipewire-pulse.socket` and `wireplumber.service` enabled. `pactl info` under `medvetalkie` reached local Pulse-compatible socket and identified `PulseAudio (on PipeWire 1.4.2)`; `wpctl status` showed running PipeWire and WirePlumber clients.
+- `pipewire 1.4.2-1`, `pipewire-pulse 1.4.2-1`, `wireplumber 0.5.8-2`, `libspa-0.2-bluetooth 1.4.2-1`, `bluez 5.82-1.1+rpt2` installed. `pactl`, `wpctl` and `pw-cli` now available. Both user audio sockets present. ALSA sinks visible. No actual Bluetooth card, headset source or sink exists yet because no headset is connected.
+- BlueZ remains active with two controllers; sysfs maps `hci0 -> 1-1.3` and `hci1 -> 1-1.4`, VID:PID `10d7:b012`. No connected ACL devices. Current diagnostic still reports `address=unavailable` for both sysfs-mapped HCI interfaces; do not assume the two BlueZ MAC addresses are mapped to particular USB ports until proven.
+- `wpctl status` reports absent RTKit D-Bus service and fallback realtime priority; nonfatal for basic process startup, but latency/underrun behavior is untested. Consider `rtkit` with measured audio requirements.
+- **Confirmed:** headless audio service is reachable on the live board at this moment. **Unverified:** persistence after reboot, WirePlumber Bluetooth headset profile, SCO/eSCO setup, microphone PCM, full duplex, and audio stream routing.
+- **Next gate:** explicitly pair one AIRIDE N1 with one selected Bluetooth controller, inspect resulting BlueZ Device1 and PipeWire Bluetooth card/profile/source/sink; preserve bonds and avoid changing other controllers or existing display/network services. Then run an opt-in active audio test before claiming HFP readiness.
