@@ -133,6 +133,24 @@ class BridgeTests(unittest.TestCase):
             mt.bridge(plan,"test",5,80,executor=fake,sleep=lambda _:None)
         self.assertEqual(unloaded,["42"])
 
+    def test_read_only_live_diagnostics(self):
+        seen=[]
+        def reader(argv):
+            seen.append(argv)
+            if argv[-1] == "modules":
+                return "51 module-loopback a\n52 other-module b"
+            if argv[-1] == "sinks":
+                return "100 alsa_output.fake\n101 bluez_output.headset"
+            if argv[-1] == "sources":
+                return "100 alsa_input.fake\n101 bluez_input.headset"
+            return "11 active_stream"
+        result=mt.audio_snapshot("test", reader)
+        self.assertIn("51 module-loopback", result)
+        self.assertNotIn("52 other-module", result)
+        self.assertIn("bluez_input.headset", result)
+        self.assertTrue(all("pactl" in argv for argv in seen))
+        self.assertFalse(any("load-module" in argv or "unload-module" in argv for argv in seen))
+
     def test_module_id_rejects_unexpected_output(self):
         for value in ("", "module 3", "3\n4", "-1"):
             with self.assertRaises(mt.BridgeError):
