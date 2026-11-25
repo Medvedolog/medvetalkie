@@ -19,10 +19,6 @@ def fake_executor(argv, timeout=12):
     tail = argv[-1]
     if argv == ["bluetoothctl", "list"]:
         return "Controller "+C0+" First\nController "+C1+" Second"
-    if argv[:3] == ["bluetoothctl", "-i", C0]:
-        return "Device "+A+" AIRIDE N1"
-    if argv[:3] == ["bluetoothctl", "-i", C1]:
-        return "Device "+B+" Other Headset"
     if tail == "cards":
         return (
             "Card #1\n Name: alsa_card.mock\n Active Profile: output:stereo-fallback\n"
@@ -45,6 +41,10 @@ class BridgeTests(unittest.TestCase):
         self.audio = patch.object(mt, "audio_cli", side_effect=lambda user, *a: list(a))
         self.audio.start()
         self.addCleanup(self.audio.stop)
+        self.selected = patch.object(mt, "selected_bluez", side_effect=lambda controller, query: (
+            "Controller "+controller+" [default]\nDevice "+(A if controller == C0 else B)+" headset"))
+        self.selected.start()
+        self.addCleanup(self.selected.stop)
 
     def test_validate_two_controllers_and_hfp(self):
         plan=mt.validate(A,B,"test",executor=fake_executor)
