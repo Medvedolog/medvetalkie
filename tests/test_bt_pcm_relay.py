@@ -37,6 +37,49 @@ class PCMRelayTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 mod.Route("A","medvetalkie","input","output",80,gain=bad)
 
+    def test_noise_gate_and_speech_hangover(self):
+        import struct
+        silent=bytes(mod.FRAME_BYTES)
+        voice=struct.pack("<h",10000)*(mod.FRAME_BYTES//2)
+        gate=mod.NoiseGate(-48,0.15,hang_frames=2)
+        self.assertEqual(gate.process(silent),silent)
+        self.assertEqual(gate.closed_frames,1)
+        self.assertEqual(gate.process(voice),voice)
+        self.assertEqual(gate.process(silent),silent)
+        self.assertEqual(gate.process(silent),silent)
+        self.assertEqual(gate.closed_frames,1)
+        self.assertEqual(gate.process(voice),voice)
+        attenuated=gate.process(voice)
+        self.assertEqual(attenuated,voice)
+
+    def test_gate_quiet_frame_attenuation(self):
+        import struct
+        frame=struct.pack("<h",100)*(mod.FRAME_BYTES//2)
+        gate=mod.NoiseGate(-30,0.15,hang_frames=0)
+        changed=gate.process(frame)
+        self.assertEqual(struct.unpack("<h",changed[:2])[0],15)
+        self.assertEqual(gate.closed_frames,1)
+
+    def test_gate_is_off_by_default(self):
+        route=mod.Route("A","medvetalkie","input","output",40,queue_frames=3)
+        self.assertIsNone(route.gate)
+        enabled=mod.Route("A","medvetalkie","input","output",40,queue_frames=3,
+                          gate_dbfs=-48,gate_floor=0.15)
+        self.assertIsNotNone(enabled.gate)
+
+    def test_capture_gap_reporting(self):
+        stat=mod.Stats()
+        stat.capture(bytes(mod.FRAME_BYTES),1.0)
+        stat.capture(bytes(mod.FRAME_BYTES),1.05)
+        self.assertEqual(stat.report(1)["max_capture_gap_ms"],50.0)
+
+    def test_long_soak_limit(self):
+        with patch.object(mod.Route,"begin") as begin:
+            with self.assertRaises(ValueError):
+                mod.execute({"A":{},"B":{}},"both","medvetalkie",601,40)
+        begin.assert_not_called()
+        self.assertEqual(mod.MAX_SECONDS,600)
+
     def test_pcm_peak_rms_and_clipping(self):
         stat=mod.Stats()
         data=struct.pack("<hhhh",0,32767,-32768,16384)
