@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Offline CI smoke checks for the SSH Bluetooth bench TUI."""
 import importlib.util
+import tempfile
+import wave
+import os
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -49,6 +52,60 @@ class TuiTests(unittest.TestCase):
     def test_audio_not_falsely_ready(self):
         self.assertTrue(mod.has_profile("UUID: Handsfree (0000111e-)"))
         self.assertFalse(mod.has_profile("Connected: yes\nUUID: Audio Sink"))
+
+
+
+bench_path = Path(__file__).resolve().parents[1] / "platform/bluetooth/bt_audio_bench.py"
+bench_spec = importlib.util.spec_from_file_location("mt_bt_audio_bench", bench_path)
+audio = importlib.util.module_from_spec(bench_spec)
+bench_spec.loader.exec_module(audio)
+
+
+class AudioBenchTests(unittest.TestCase):
+    def test_headset_filter_and_hfp_requirement(self):
+        cards = ("Card #97\nName: bluez_card.41_42_63_27_E7_3A\n"
+                 "Active Profile: headset-head-unit\n")
+        def fake(argv):
+            kind = argv[-1]
+            if kind == "sinks":
+                return ("112 bluez_output.41_42_63_27_E7_3A.1 PipeWire\n"
+                        "86 alsa_output.mock PipeWire\n")
+            if kind == "sources":
+                return ("99 bluez_input.41:42:63:27:E7:3A PipeWire\n"
+                        "112 bluez_output.41_42_63_27_E7_3A.1.monitor PipeWire\n")
+            return cards
+        with patch.object(audio, "audio_command", side_effect=lambda u,p,*a: [p,*a]):
+            sink, source, profile = audio.find_audio_devices(audio_mac, "test", runner=fake)
+        self.assertEqual(profile, "headset-head-unit")
+        self.assertEqual(sink, "bluez_output.41_42_63_27_E7_3A.1")
+        self.assertEqual(source, "bluez_input.41:42:63:27:E7:3A")
+
+    def test_invalid_mac_never_runs_commands(self):
+        with self.assertRaises(ValueError):
+            audio.find_audio_devices("not-a-mac", "medvetalkie")
+
+    def test_pcm_metrics_and_tone(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "signal.wav"
+            audio.tone(path, 3)
+            metrics = audio.measure(path)
+            self.assertEqual(metrics["rate"], 16000)
+            self.assertEqual(metrics["seconds"], 3)
+            self.assertEqual(metrics["clipped"], 0)
+            self.assertLess(metrics["peak_dbfs"], -15)
+            self.assertEqual(len(metrics["windows_dbfs"]), 6)
+
+    def test_test_requires_confirmation(self):
+        bench = mod.Bench()
+        bench.adapters = [{"mac":"F4:4E:FC:57:69:64", "name":"UGREEN"}]
+        bench.devices = [{"mac":audio_mac, "name":"AIRIDE N1"}]
+        with patch.object(bench, "work") as worker:
+            bench.command("duplex")
+        worker.assert_not_called()
+        self.assertEqual(bench.pending_duplex, (audio_mac, False))
+
+
+audio_mac = "41:42:63:27:E7:3A"
 
 
 if __name__ == "__main__":
