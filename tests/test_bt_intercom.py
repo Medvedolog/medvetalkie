@@ -84,7 +84,8 @@ class BridgeTests(unittest.TestCase):
             if "load-module" in argv: return next(ids)
             if "unload-module" in argv:return ""
             raise AssertionError(argv)
-        mt.bridge(plan,"test",5,80,executor=fake,sleep=lambda _:None)
+        with patch.object(mt.time, "monotonic", side_effect=[0.0, 5.1]):
+            mt.bridge(plan,"test",5,80,executor=fake,sleep=lambda _:None)
         modules=[i for i in actions if "load-module" in i]
         self.assertEqual(len(modules),2)
         self.assertIn("source=bluez_input."+A, modules[0])
