@@ -804,3 +804,10 @@ Operator applied per-user WirePlumber configuration under `/home/medvetalkie/.co
 **Still NOT verified:** HFP/HSP profile selection, SCO/eSCO connection, input microphone source, active sample transport or two-way voice. No second headset test performed. `journalctl _UID=1000 --user-unit=wireplumber.service` showed no entries (wrong/empty journal selector is not evidence of no warnings).
 
 Next: inspect the actual `bluez_card.41_42_63_27_E7_3A` card profile list under the `medvetalkie` user's PipeWire Pulse socket. If HFP profile is available, use only that exact profile with `pactl set-card-profile` (explicit hardware test) and then inspect Bluetooth sink/source and SCO HCI events. Preserve existing bonding and display/network state.
+
+
+## AIRIDE N1 HFP mSBC profile and dual PipeWire nodes observed — 2026-11-25
+
+Physical operator log confirms `pactl set-card-profile bluez_card.41_42_63_27_E7_3A headset-head-unit` returned success, and `pactl list cards` showed `Active Profile: headset-head-unit`. A Bluetooth HFP sink `bluez_output.41_42_63_27_E7_3A.1` (`s16le`, 1 channel, 16000 Hz) and headset microphone source `bluez_input.41:42:63:27:E7:3A` (`float32le`, 1 channel, 48000 Hz) appeared. Both were `SUSPENDED` (idle, no live PCM stream), so **SCO audio is not proven**. Operator subsequently ran `pactl set-card-profile ... headset-head-unit-cvsd` without an error, but has not yet posted the active CVSD card or sink/source snapshots.
+
+Next hardware test: confirm CVSD active profile, start a bounded mic recording plus playback to the headset (explicit operator action), capture HCI synchronous connection event with `btmon`; check actual audible signal and captured wave content before promoting any HFP readiness state. Then repeat in mSBC, then two separate controller/headset slots. Preserve existing bonds and ST7789/network.
