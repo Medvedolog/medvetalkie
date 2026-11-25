@@ -18,6 +18,9 @@ jobs:
         run: ctest --test-dir build --output-on-failure
       - name: ST7789 Bjorni and screen statuses
         run: python3 platform/display/screensaver/test-screensaver.py
+      - name: Live ST7789 headset telemetry safety tests
+        run: python3 -m py_compile platform/display/live-status.py && python3 tests/test_display_live_status.py
+
       - name: Optional ST7789 v2 status screen preview
         run: python3 tests/test_display_status_v2.py
 
