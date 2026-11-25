@@ -652,3 +652,36 @@ pull the new branch and use `--apply --skip-packages
 --enable-display`, inspect a real dashboard within
 the first ~8 seconds, Bjorni thereafter, and FPS.
 Do not merge `main` or claim HFP/SCO working.
+
+
+## 19. First physical Russian status dashboard seen on ST7789 — 2026-11-25
+
+Following removal of the competing legacy cron/SPI process and guarded
+deployment, operator reports: **"показал при запуске таблицу состояний
+не успел посмотреть"** (a state table appeared at startup but was gone
+before the operator could inspect it).
+
+This is the **first user-reported direct physical visual confirmation**
+of the new Russian status dashboard on the real MSP2008/ST7789
+(Orange Pi Zero 3). Unlike the earlier `display=1` installer-only
+log, the operator explicitly observed the screen contents appearing.
+It does **not** independently verify all text is legible, correct
+status freshness, clock, measured FPS, or the precise 8-second
+transition, and no updated systemd journal/photograph was provided.
+
+The renderer's current policy is hard-coded in
+`platform/display/screensaver/screensaver.c`:
+`mode=STANDBY` and `fault=NONE` show the dashboard for ~8 s
+after renderer initialization/state change, then switch to Bjorni.
+The operator may restart only `medvetalkie-display` to repeat that
+brief physical inspection, or inspect the full current
+`/run/medvetalkie/display.status` text from the console.
+
+**Usability follow-up:** A configurable on-boot status visibility
+interval (e.g. 30 seconds for bench testing, then shorter for vehicle
+use) would make hardware inspection practical. It has **not** yet
+been implemented or validated. Do not confuse the status dashboard
+with the planned interactive GPIO/LVGL settings menu.
+The legacy cron removal, reboot persistence, SPI ownership, FPS
+recovery and HFP/SCO hardware proof should be confirmed separately
+before claiming the complete display/audio system is finished.
