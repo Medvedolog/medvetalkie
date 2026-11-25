@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """MedveTalkie Bluetooth Manager: arrow/Enter-driven SSH menu. Stdlib only."""
 import curses
+import sys
 import importlib.util
 import os
 import pty
@@ -15,6 +16,7 @@ import time
 import wave
 from pathlib import Path
 from datetime import datetime
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bluez_cli import selected as selected_bluez, BluezCommandError
 
 ROOT = Path(__file__).resolve().parent
