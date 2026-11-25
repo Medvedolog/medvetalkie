@@ -811,3 +811,10 @@ Next: inspect the actual `bluez_card.41_42_63_27_E7_3A` card profile list under 
 Physical operator log confirms `pactl set-card-profile bluez_card.41_42_63_27_E7_3A headset-head-unit` returned success, and `pactl list cards` showed `Active Profile: headset-head-unit`. A Bluetooth HFP sink `bluez_output.41_42_63_27_E7_3A.1` (`s16le`, 1 channel, 16000 Hz) and headset microphone source `bluez_input.41:42:63:27:E7:3A` (`float32le`, 1 channel, 48000 Hz) appeared. Both were `SUSPENDED` (idle, no live PCM stream), so **SCO audio is not proven**. Operator subsequently ran `pactl set-card-profile ... headset-head-unit-cvsd` without an error, but has not yet posted the active CVSD card or sink/source snapshots.
 
 Next hardware test: confirm CVSD active profile, start a bounded mic recording plus playback to the headset (explicit operator action), capture HCI synchronous connection event with `btmon`; check actual audible signal and captured wave content before promoting any HFP readiness state. Then repeat in mSBC, then two separate controller/headset slots. Preserve existing bonds and ST7789/network.
+
+
+## AIRIDE N1 HFP playback reported audible — 2026-11-25
+
+- Operator reported **"есть воспроизведение"** after the CVSD/record-and-playback test instructions. This is evidence that sound was heard during playback through AIRIDE N1; it is **not yet an unambiguous confirmation that the WAV actually contained voice captured from the AIRIDE microphone**.
+- Distinguish: audible playback verified by operator; recording capture and nonzero vocal PCM require explicit operator confirmation or waveform examination; simultaneous two-way audio, SCO/eSCO packet counters and long-term stability remain **NOT VERIFIED**.
+- Next: ask whether the spoken recording was heard, then inspect `btmon` synchronously during streaming and test duplex with two real headsets/controllers. Preserve pairing, display, network and existing audio session.
