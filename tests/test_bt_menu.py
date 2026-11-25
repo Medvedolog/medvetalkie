@@ -39,6 +39,13 @@ class MenuTests(unittest.TestCase):
         self.assertEqual(flags["rssi"], -54)
         self.assertEqual(flags["battery"], 70)
 
+    def test_rssi_quality_indicator(self):
+        self.assertEqual(mod.rssi_indicator(-49), "||||")
+        self.assertEqual(mod.rssi_indicator(-65), "|||.")
+        self.assertEqual(mod.rssi_indicator(-77), "||..")
+        self.assertEqual(mod.rssi_indicator(-92), "|...")
+        self.assertEqual(mod.rssi_indicator(None), "----")
+
     def test_no_rssi_not_fabricated(self):
         flags = mod.parse_device_info("Connected: yes\nPaired: yes")
         self.assertIsNone(flags["rssi"])
