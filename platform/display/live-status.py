@@ -76,7 +76,7 @@ def headset(mac, adapter, cards, sinks, sources, user="medvetalkie", executor=ex
             except (OSError,RuntimeError,subprocess.TimeoutExpired):pass
             break
     if connected is True and profile in ("headset-head-unit","headset-head-unit-cvsd") and source_present and sink_present:
-        state="HFP_READY"
+        state="PROFILE_PENDING"
     elif connected is True and profile and profile.startswith("a2dp-") and sink_present:
         state="A2DP_READY"
     elif connected is True and profile and profile.startswith("a2dp-"):
@@ -93,7 +93,7 @@ def headset(mac, adapter, cards, sinks, sources, user="medvetalkie", executor=ex
         state="UNASSIGNED"
     return dict(state=state, battery=battery if isinstance(battery,int) and 0<=battery<=100 else -1,
                 rssi=rssi if isinstance(rssi,int) and -127<=rssi<=20 else -128,
-                volume=volume, profile="HFP" if state=="HFP_READY" else ("A2DP" if state=="A2DP_READY" else "UNKNOWN"),
+                volume=volume, profile="HFP" if profile in ("headset-head-unit","headset-head-unit-cvsd") else ("A2DP" if profile and profile.startswith("a2dp-") else "UNKNOWN"),
                 connected=connected is True)
 
 def current_network(executor=execute):
