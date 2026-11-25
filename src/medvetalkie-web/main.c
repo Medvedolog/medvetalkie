@@ -5,6 +5,8 @@
 #include <civetweb.h>
 #include <json-c/json.h>
 #include <signal.h>
+#include <stdlib.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -129,8 +131,9 @@ static int index_handler(struct mg_connection *conn, void *unused)
 
 int main(int argc, char **argv)
 {
+    char listening_port[32] = "127.0.0.1:8765";
     const char *options[] = {
-        "listening_ports", "127.0.0.1:8765",
+        "listening_ports", listening_port,
         "num_threads", "4",
         "enable_keep_alive", "no",
         NULL
@@ -141,11 +144,30 @@ int main(int argc, char **argv)
         puts("medvetalkie-web 0.0.2-alpha");
         return 0;
     }
-    if (argc == 3 && strcmp(argv[1], "--ipc-socket") == 0) {
-        ipc_path = argv[2];
-    } else if (argc != 1) {
-        fprintf(stderr, "Usage: %s [--version] [--ipc-socket ABSOLUTE_PATH]\n", argv[0]);
-        return 64;
+    for (int i = 1; i < argc; ++i) {
+        if (!strcmp(argv[i], "--ipc-socket") && i + 1 < argc) {
+            ipc_path = argv[++i];
+        } else if (!strcmp(argv[i], "--listen-port") && i + 1 < argc) {
+            const char *value = argv[++i];
+            char *end = NULL;
+            long port;
+            errno = 0;
+            if (!value[0] || value[0] == '-' || value[0] == '+' ||
+                value[0] == ' ' || value[0] == '\t') {
+                fputs("Invalid loopback listen port\n", stderr);
+                return 64;
+            }
+            port = strtol(value, &end, 10);
+            if (errno || *end || port < 1024 || port > 65535) {
+                fputs("Invalid loopback listen port\n", stderr);
+                return 64;
+            }
+            snprintf(listening_port, sizeof(listening_port), "127.0.0.1:%ld", port);
+        } else {
+            fprintf(stderr, "Usage: %s [--version] [--ipc-socket ABSOLUTE_PATH] "
+                    "[--listen-port 1024..65535 (loopback only)]\n", argv[0]);
+            return 64;
+        }
     }
     if (ipc_path[0] != '/') {
         fputs("IPC socket path must be absolute\n", stderr);
