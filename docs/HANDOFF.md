@@ -755,3 +755,14 @@ physical behavior nor the restored 25 FPS has been observed yet.
 - The `medvetalkie-bt` executable is still only a scaffold. No active HFP lifecycle, SCO transport or duplex routing code is present, and no Orange Pi measurement was made in this iteration.
 - Next hardware action: `sudo sh platform/bluetooth/diagnose-hfp-prereqs.sh` after pulling the work branch; share its output. If the audio session belongs to a different user, set `MT_AUDIO_USER` explicitly. Inspect findings before designing the active, opt-in one-headset HFP/audio test.
 - Verification: file creation confirmed by GitHub commit; CI and board execution of this new script are **not yet verified**.
+
+
+## Bluetooth board preflight observed — 2026-11-25
+
+Operator ran `diagnose-hfp-prereqs.sh` twice on Orange Pi Zero 3, kernel `6.18.64-current-sunxi64`:
+
+- BlueZ 5.82 active; two USB adapters VID:PID `10d7:b012`, sysfs `hci0 -> 1-1.3` and `hci1 -> 1-1.4`. BlueZ lists controller addresses `F4:4E:FC:57:69:64` and `F4:4E:FC:2D:FD:4B`, but the sysfs `address` attributes are blank, so HCI-to-MAC pairing is **not verified** by this log. No connected ACL headset devices.
+- `pactl`, `wpctl`, `pw-cli` missing; `pipewire`, `pipewire-pulse`, `wireplumber`, `libspa-0.2-bluetooth` not installed. Service user `medvetalkie` is UID 1000, no per-user PipeWire/Pulse socket.
+- HFP/SCO/PCM and two-way voice are **NOT TESTED**. No need to change USB/BlueZ driver or touch the ST7789 on the evidence above.
+- Follow-up commit `49c91f0`: diagnostic handles missing sysfs address without treating the MAC mapping as proof; BlueZ lookup is best-effort.
+- Next action: resolve previous APT signature/time problems first, then install the four missing audio packages (plus CLI helpers as needed) from authenticated repositories; enable user-session PipeWire/WirePlumber for the dedicated medvetalkie account and re-run preflight before any active pairing. Audio stack setup and CI of the diagnostic script remain **unverified**.
