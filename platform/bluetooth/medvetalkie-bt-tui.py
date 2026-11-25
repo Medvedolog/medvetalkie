@@ -116,6 +116,7 @@ class Bench:
         self.results = queue.Queue()
         self._thread = None
         self.last_refresh = 0.0
+        self.pending_pair = None
 
     def addlog(self, message):
         stamp = time.strftime("%H:%M:%S")
@@ -209,7 +210,9 @@ class Bench:
             addr = device["mac"]
             # Never remove bond or trust a device implicitly.
             if kind == "pair":
-                self.notice = "P: сопряжение только по явному запросу; возможен запрос PIN"
+                self.pending_pair = addr
+                self.notice = "Подтвердить PAIR %s? Y — да, N — отмена" % addr
+                return
             self.work("%s %s" % (kind.upper(), addr), lambda: (
                 kind, run(["bluetoothctl", "-i", mac, kind, addr],
                           45 if kind == "pair" else 20)))
@@ -298,6 +301,17 @@ class Bench:
             self.update()
             self.draw(win)
             key = win.getch()
+            if self.pending_pair is not None:
+                target = self.pending_pair
+                self.pending_pair = None
+                if key in (ord("y"), ord("Y")):
+                    self.work("PAIR %s" % target, lambda: (
+                        "pair", run(["bluetoothctl", "-i", self.current_mac(),
+                                     "pair", target], 45)))
+                else:
+                    self.notice = "Сопряжение отменено"
+                time.sleep(0.07)
+                continue
             if key in (ord("q"), ord("Q"), 27):
                 return
             elif key in (ord("1"), ord("2")):
