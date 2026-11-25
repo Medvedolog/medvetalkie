@@ -158,7 +158,21 @@ if [[ "$MODE" == apply && "$SKIP_APT" == 0 ]]; then
    apt_proxy() { apt-get "$@"; }
  fi
  log "Installing dependencies via selected proxy, without changing global APT proxy settings"
- apt_proxy update
+ # apt-get update can return 0 even if some InRelease signatures fail and
+ # old cached indexes are silently reused. Never proceed on those warnings.
+ apt_update_log="$(mktemp /tmp/medvetalkie-apt-update.XXXXXXXX)"
+ if ! apt_proxy update >"$apt_update_log" 2>&1; then
+   cat "$apt_update_log" >&2
+   rm -f "$apt_update_log"
+   die "APT update failed; check clock sync, signed repository keys and mixed proxy"
+ fi
+ if grep -Eiq 'Not live until|Missing key|NO_PUBKEY|OpenPGP signature|signature verification|Failed to fetch|Some index files failed|Release file.*not valid|^W:.*(signature|repository|index files)|^E:' "$apt_update_log"; then
+   cat "$apt_update_log" >&2
+   rm -f "$apt_update_log"
+   die "APT index verification warnings: refusing cached indexes; fix clock/key or use --skip-packages after confirming dependencies"
+ fi
+ cat "$apt_update_log"
+ rm -f "$apt_update_log"
  DEBIAN_FRONTEND=noninteractive apt_proxy install -y --no-install-recommends \
    build-essential cmake pkg-config libjson-c-dev libsqlite3-dev \
    libdbus-1-dev libcivetweb-dev python3 curl ca-certificates git psmisc
