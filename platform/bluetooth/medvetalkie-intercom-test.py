@@ -15,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from bluez_cli import selected as selected_bluez
+from bluez_cli import selected as selected_bluez, BluezCommandError
 
 MAC_RE = re.compile(r"^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 CONTROLLER_RE = re.compile(r"^Controller\s+((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})", re.M)
@@ -225,7 +225,7 @@ def main():
             signal.signal(signal.SIGTERM, previous)
         print("Bridge stopped; test routes removed.")
         return 0
-    except (BridgeError, KeyError) as exc:
+    except (BridgeError, BluezCommandError, KeyError) as exc:
         print("NOT READY: "+str(exc), file=sys.stderr)
         return 2
     except KeyboardInterrupt:
