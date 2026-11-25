@@ -244,9 +244,13 @@ remains outstanding.
   but not group/world-writable. This catches the precise bug even when
   the simulator is invoked without root.
 
-**Next physical gate:** validate the updated commit in combined CI,
-pull it through the same mixed proxy, run `--apply --skip-packages`
-without display, then collect `systemctl status`, health/BlueZ/USB
-responses and `/run/medvetalkie/display.status`. Do not enable the SPI
-renderer before Core/Web/status are healthy. Correct the wall clock and
-Armbian signing key separately; never bypass APT signature validation.
+**Corrected release-permission CI:** [GitHub Actions run 45600391479](https://github.com/Medvedolog/medvetalkie/actions/runs/45600391479) passed **10/10 CTest**, ST7789/Bjorni regressions and the complete staged installer simulation. The simulator explicitly checks permissions on the public /opt release path, binaries and manifest after two updates and rollback.
+
+**Next physical gate:** pull the updated existing work branch through the
+same mixed proxy and rerun `--apply --skip-packages` without display,
+then collect `systemctl status`, health/BlueZ/USB responses and
+`/run/medvetalkie/display.status`. If activation fails, the installer
+will print service journal data **before automatic rollback**; collect
+those errors. Do not enable the SPI renderer before Core/Web/status are
+healthy. Correct the wall clock and Armbian signing key separately;
+never bypass APT signature validation.
