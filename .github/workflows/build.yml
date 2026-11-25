@@ -22,4 +22,4 @@ jobs:
         run: python3 tests/test_deploy_installer.py
 
       - name: Bluetooth SSH TUI offline tests
-        run: python3 -m py_compile platform/bluetooth/medvetalkie-bt-tui.py && python3 tests/test_bt_tui.py
+        run: python3 -m py_compile platform/bluetooth/medvetalkie-bt-tui.py platform/bluetooth/bt_audio_bench.py && python3 tests/test_bt_tui.py
