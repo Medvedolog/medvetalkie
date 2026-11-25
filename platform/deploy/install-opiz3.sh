@@ -103,12 +103,6 @@ if [[ "$MODE" == apply ]]; then
  command -v systemctl >/dev/null || die "systemd missing"
  if ((DISPLAY && !ROLLBACK)); then
    [[ -c /dev/spidev1.0 ]] || die "/dev/spidev1.0 not available"
-   # The psmisc package may only be installed in the package stage below.
-   if command -v fuser >/dev/null &&
-      ! systemctl is-active --quiet medvetalkie-display.service &&
-      fuser -s /dev/spidev1.0; then
-     die "SPI occupied by old renderer: stop it yourself, no processes will be killed"
-   fi
  fi
 fi
 [[ ! -L "$PREFIX" && (! -e "$PREFIX/current" || -L "$PREFIX/current") ]] ||
@@ -179,11 +173,12 @@ if [[ "$MODE" == apply && "$SKIP_APT" == 0 ]]; then
 fi
 
 if [[ "$MODE" == apply && "$DISPLAY" == 1 ]]; then
- command -v fuser >/dev/null || die "fuser missing (install psmisc)"
- if ! systemctl is-active --quiet medvetalkie-display.service &&
-    fuser -s /dev/spidev1.0; then
-   die "SPI occupied by old renderer; refusing to interfere with it"
- fi
+ # Even if the systemd display unit appears active, its current process may
+ # only be compiling/restarting while a legacy cron screensaver holds SPI.
+ # Verify every owner PID belongs to OUR display cgroup, otherwise stop
+ # before recompiling the entire project or replacing any running services.
+ sh "$SOURCE_DIR/platform/deploy/check-display-owner.sh" --allow-managed ||
+   die "Unmanaged SPI renderer detected: disable its cron/manual supervisor"
 fi
 command -v cmake >/dev/null || die "cmake missing"
 command -v python3 >/dev/null || die "python3 missing"
@@ -217,6 +212,7 @@ for binary in medvetalkied medvetalkie-web medvetalkie-display-status medvetalki
  install -m 0755 "$BUILD/$binary" "$STAGE/bin/$binary"
 done
 install -m 0644 "$SOURCE_DIR/platform/display/medvetalkie-screensaver.sh" "$STAGE/medvetalkie-screensaver.sh"
+install -m 0644 "$SOURCE_DIR/platform/deploy/check-display-owner.sh" "$STAGE/check-display-owner.sh"
 printf 'source_revision=%s\n' "$revision" >"$STAGE/MANIFEST"
 chmod 0644 "$STAGE/MANIFEST"
 # mktemp -d uses 0700. Leaving that mode in a release breaks every
@@ -260,10 +256,10 @@ restore_failure() {
    # Record unit status and recent errors while the attempted release
    # and its service processes are still present. Diagnostic failures
    # must never block the rollback.
-   systemctl --no-pager --full status medvetalkie-core.service medvetalkie-status.service medvetalkie-web.service || :
-   journalctl --no-pager --output=short-iso -n 45 \
+   systemctl --no-pager --full status medvetalkie-core.service medvetalkie-status.service medvetalkie-web.service medvetalkie-display.service || :
+   journalctl --no-pager --output=short-iso -n 65 \
      -u medvetalkie-core.service -u medvetalkie-status.service \
-     -u medvetalkie-web.service || :
+     -u medvetalkie-web.service -u medvetalkie-display.service || :
    ls -ld "$PREFIX" "$PREFIX/releases" "$release" "$release/bin" || :
    log "Restoring the previous release and service definitions"
    for unit in $(units); do systemctl stop "$unit" >/dev/null 2>&1 || :; done
@@ -288,6 +284,12 @@ restore_failure() {
 trap restore_failure ERR INT TERM
 CHANGED=1
 for unit in $(units); do systemctl stop "$unit" >/dev/null 2>&1 || :; done
+# An externally supervised renderer can appear between preflight and
+# activation. Never let two GPIO/SPI clients compete after stop.
+if ((DISPLAY)); then
+ sh "$SOURCE_DIR/platform/deploy/check-display-owner.sh" --require-free ||
+   die "SPI not released after stopping managed display; rolling back"
+fi
 mv "$STAGE" "$release"; STAGE=""
 # Verify the *actual service user* can traverse the entire installed
 # /opt path before we replace services or modify the current symlink.
@@ -325,7 +327,36 @@ for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
 done
 if ((health==0)); then echo "Core/Web health check failed" >&2; false; fi
 if [[ ! -f /run/medvetalkie/display.status ]]; then echo "No status snapshot" >&2; false; fi
-grep -q '^MTSTATUS1$' /run/medvetalkie/display.status
+grep -q '^MTSTATUS1
+if [[ -n "$OLD_RELEASE" && -d "$OLD_RELEASE" ]]; then
+ ln -sfn "$OLD_RELEASE" "$PREFIX/previous"
+fi
+CHANGED=0
+trap - ERR INT TERM
+log "INSTALLED: $release"
+log "Web Alpha: http://127.0.0.1:8765/ (local only)"
+log "Units: medvetalkie-core/status/web; display=$DISPLAY"
+log "Previous release: $OLD_RELEASE; backed-up units: $backup"
+log "Existing boot/kernel/WLAN blacklist and network configuration are unchanged"
+ /run/medvetalkie/display.status
+if ((DISPLAY)); then
+ # systemctl is-active is insufficient: Type=simple reports active while
+ # the launcher compiles its C source, and then may fail on busy GPIO.
+ # Success requires the real renderer to own SPI within this unit cgroup.
+ display_ready=0
+ for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+   if systemctl is-active --quiet medvetalkie-display.service &&
+      sh "$SOURCE_DIR/platform/deploy/check-display-owner.sh" --require-managed >/dev/null 2>&1; then
+     display_ready=1
+     break
+   fi
+   sleep 0.5
+ done
+ if ((display_ready==0)); then
+   echo "Display is not rendering: no medvetalkie-display cgroup PID owns SPI; check GPIO PC5/PC6 and cron" >&2
+   false
+ fi
+fi
 if [[ -n "$OLD_RELEASE" && -d "$OLD_RELEASE" ]]; then
  ln -sfn "$OLD_RELEASE" "$PREFIX/previous"
 fi
