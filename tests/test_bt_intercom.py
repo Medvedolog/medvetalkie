@@ -17,8 +17,17 @@ C1 = "F4:4E:FC:2D:FD:4B"
 
 def fake_executor(argv, timeout=12):
     tail = argv[-1]
-    if argv == ["bluetoothctl", "list"]:
-        return "Controller "+C0+" First\nController "+C1+" Second"
+    if argv == ["busctl", "--system", "tree", "org.bluez"]:
+        return ("/org/bluez/hci0\n/org/bluez/hci1\n"
+                "/org/bluez/hci0/dev_"+A.replace(":","_")+"\n"
+                "/org/bluez/hci1/dev_"+B.replace(":","_")+"\n")
+    if argv[:4] == ["busctl", "--system", "get-property", "org.bluez"]:
+        path, interface, prop = argv[4:]
+        if interface == "org.bluez.Adapter1" and prop == "Address":
+            return 's "' + (C0 if path.endswith("hci0") else C1) + '"'
+        if interface == "org.bluez.Device1" and prop == "Connected":
+            return "b true"
+        raise AssertionError("unexpected D-Bus property " + repr(argv))
     if tail == "cards":
         return (
             "Card #1\n Name: alsa_card.mock\n Active Profile: output:stereo-fallback\n"
@@ -41,10 +50,6 @@ class BridgeTests(unittest.TestCase):
         self.audio = patch.object(mt, "audio_cli", side_effect=lambda user, *a: list(a))
         self.audio.start()
         self.addCleanup(self.audio.stop)
-        self.selected = patch.object(mt, "selected_bluez", side_effect=lambda controller, query: (
-            "Controller "+controller+" [default]\nDevice "+(A if controller == C0 else B)+" headset"))
-        self.selected.start()
-        self.addCleanup(self.selected.stop)
 
     def test_validate_two_controllers_and_hfp(self):
         plan=mt.validate(A,B,"test",executor=fake_executor)
@@ -52,6 +57,23 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(plan["B"]["adapter"],C1)
         self.assertEqual(plan["A"]["source"],"bluez_input."+A)
         self.assertEqual(plan["B"]["profile"],"headset-head-unit-cvsd")
+
+    def test_dbus_inventory_rejects_disconnected_headset(self):
+        def disconnected(argv, timeout=12):
+            if argv[-2:] == ["org.bluez.Device1", "Connected"] and (
+                "dev_"+B.replace(":","_") in argv[4]):
+                return "b false"
+            return fake_executor(argv, timeout)
+        with self.assertRaisesRegex(mt.BridgeError, "exactly one"):
+            mt.validate(A, B, "test", executor=disconnected)
+
+    def test_dbus_inventory_rejects_missing_controller(self):
+        def only_one(argv, timeout=12):
+            if argv[-1] == "org.bluez":
+                return "/org/bluez/hci0\n/org/bluez/hci0/dev_"+A.replace(":","_")
+            return fake_executor(argv, timeout)
+        with self.assertRaisesRegex(mt.BridgeError, "two BlueZ"):
+            mt.validate(A, B, "test", executor=only_one)
 
     def test_same_device_rejected(self):
         with self.assertRaisesRegex(mt.BridgeError,"distinct"):
