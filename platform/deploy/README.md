@@ -88,6 +88,48 @@ Rollback is not an OS restore; it cannot reverse independently installed
 software, changes to an SD image, or unrelated system services. The
 installer deliberately does not make those modifications.
 
+## Physical board recovery after first installer run (2026-11-25)
+
+The first physical Orange Pi Zero 3 attempt **successfully compiled every
+C11 target** but failed one host-sensitive `web_health` test (9/10):
+the old test expected no system BlueZ and failed on HTTP 200 from the
+board's real `bluetoothd`. This was a test bug, not confirmation of
+HFP functionality. The test is now isolated from the real D-Bus and
+uses a separate `127.0.0.1:18765` test port to avoid conflicting with
+a previously installed systemd WebUI.
+
+The same session reported Debian `sqv: Not live until ...` (clock behind
+signed metadata validity) and an absent Armbian repository signing key.
+Do not disable APT signature verification. Investigate separately:
+
+```sh
+date -u
+timedatectl status
+```
+
+Synchronize the system clock using a trustworthy source and check the
+Armbian keyring/repository configuration against official documentation.
+The installer now refuses to continue after partial `apt-get update`
+signature/index errors even if apt returns status 0.
+
+**For this board only, the full required development dependencies were
+already installed during the first attempt.** After pulling the updated
+branch using the mixed proxy, rerun without APT while repository trust is
+being repaired:
+
+```sh
+PROXY=http://192.168.11.100:10880
+git -c http.proxy="$PROXY" pull --ff-only
+bash platform/deploy/install-opiz3.sh --dry-run --proxy "$PROXY"
+sudo bash platform/deploy/install-opiz3.sh --apply --skip-packages --proxy "$PROXY"
+```
+
+This is **not** a workaround for missing runtime dependencies or a
+replacement for fixing APT keys. Build/CTest still run in full before
+activation; no boot/network changes are made. Do **not** enable the
+display in this first retrial: inspect the systemd status, actual USB
+inventory, BlueZ observation and generated `MTSTATUS1` snapshot first.
+
 ## 5. Current technical limitations
 
 - The installed WebUI is read-only, loopback-only and unauthenticated;
