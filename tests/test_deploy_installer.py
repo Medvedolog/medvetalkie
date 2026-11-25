@@ -26,6 +26,30 @@ def call(*args, succeed=True):
     return result
 
 
+def check_legacy_display_cron():
+    # The real board had both @reboot and minutely watchdog entries in
+    # /etc/cron.d, not root's personal crontab. Stop before service shutdown.
+    guard = REPO / "platform" / "deploy" / "check-legacy-display-cron.sh"
+    with tempfile.TemporaryDirectory(prefix="mt-cron-guard-") as temp:
+        path = Path(temp) / "old-bjorni-cron"
+        def check(expected):
+            p = subprocess.run(["sh", str(guard), str(path)],
+                               capture_output=True, text=True)
+            assert (p.returncode == 0) == expected, (p.returncode, p.stderr)
+        check(True)  # no /etc/cron.d entry: safe
+        path.write_text("# @reboot root /bin/bash /root/medvetalkie-screensaver.sh\\n")
+        check(True)
+        path.write_text(
+            "@reboot root /bin/bash /root/medvetalkie-screensaver.sh\\n"
+            "* * * * * root /bin/bash /root/medvetalkie-screensaver.sh\\n")
+        check(False)
+        path.write_text(
+            " * * * * * root /bin/bash /root/medvetalkie-screensaver.sh\\n")
+        check(False)
+        path.write_text("# old Bjorni disabled\\n* * * * * root /usr/bin/true\\n")
+        check(True)
+
+
 def check_spi_owner_guard():
     # Reproduce the physical bench: stale cron owns SPI while the display
     # systemd unit is running/restarting its C compiler. Never evict it.
@@ -79,6 +103,8 @@ def check_release_access(staging):
     assert stat.S_IMODE((release / "medvetalkie-screensaver.sh").stat().st_mode) & 0o004
     assert (release / "check-display-owner.sh").read_bytes() == (
         REPO / "platform" / "deploy" / "check-display-owner.sh").read_bytes()
+    assert (release / "check-legacy-display-cron.sh").read_bytes() == (
+        REPO / "platform" / "deploy" / "check-legacy-display-cron.sh").read_bytes()
 
 
 def check_services(staging):
@@ -117,6 +143,11 @@ def main():
         capture_output=True, text=True)
     assert guard_syntax.returncode == 0, guard_syntax.stderr
     check_spi_owner_guard()
+    cron_guard_syntax = subprocess.run(
+        ["sh", "-n", str(REPO / "platform" / "deploy" / "check-legacy-display-cron.sh")],
+        capture_output=True, text=True)
+    assert cron_guard_syntax.returncode == 0, cron_guard_syntax.stderr
+    check_legacy_display_cron()
 
     dry = call("--dry-run", "--proxy", "http://192.168.11.100:10880")
     assert "mixed HTTP proxy=http://192.168.11.100:10880" in dry.stdout
@@ -196,8 +227,8 @@ def main():
         assert unmanaged.read_text().startswith("[Unit]")
 
     print("PASS deploy: mixed proxy, dry-run, non-root permissions, "
-          "SPI owner guard and restart limits, systemd, second install, "
-          "rollback, unmanaged-unit protection")
+          "SPI ownership guard, cron.d watchdog rejection, systemd limits, "
+          "second install, rollback, unmanaged-unit protection")
 
 
 if __name__ == "__main__":
