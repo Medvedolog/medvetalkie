@@ -37,7 +37,6 @@ def check_spi_owner_guard():
         fakebin = root / "bin"
         fakebin.mkdir()
         fuser = fakebin / "fuser"
-        fuser.write_text("#!/bin/sh\\nprintf '%s\\n' \\"\\$MT_TEST_SPI_PIDS\\"\\n")
         # Mock fuser deliberately takes its own input from the test env:
         # the guard still reads /proc/PID/cgroup for real PID ownership.
         fuser.write_text('#!/bin/sh\nprintf "%s\\n" "$MT_TEST_SPI_PIDS"\n')
