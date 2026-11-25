@@ -177,7 +177,24 @@ def print_plan(plan, latency):
     print("Target loopback latency: %d ms (not a measured RTT)" % latency)
 
 
-def bridge(plan, user, seconds, latency, executor=run, sleep=time.sleep):
+def audio_snapshot(user, executor=run):
+    """Inspect routing after module creation; never change audio settings."""
+    result = []
+    for kind in ("modules", "sink-inputs", "source-outputs", "sinks", "sources"):
+        try:
+            output = executor(audio_cli(user, "pactl", "list", "short", kind))
+            lines = output.splitlines()
+            if kind == "modules":
+                lines = [line for line in lines if "module-loopback" in line]
+            elif kind in ("sinks", "sources"):
+                lines = [line for line in lines if "bluez_" in line]
+            result.append(kind + ":\n" + ("\n".join(lines) if lines else "  (none)"))
+        except Exception as exc:
+            result.append(kind + ": ERROR " + str(exc))
+    return "\n".join(result)
+
+
+def bridge(plan, user, seconds, latency, executor=run, sleep=time.sleep, diagnose=False):
     if not (5 <= seconds <= 300):
         raise BridgeError("Duration must be 5..300 seconds")
     a, b = plan["A"], plan["B"]
@@ -192,6 +209,11 @@ def bridge(plan, user, seconds, latency, executor=run, sleep=time.sleep):
                   flush=True)
         print("Two-way bridge active for %d seconds. Ctrl+C to stop." % seconds,
               flush=True)
+        if diagnose:
+            sleep(2)
+            print("=== LIVE PipeWire snapshot ===", flush=True)
+            print(audio_snapshot(user, executor), flush=True)
+            print("=== END snapshot ===", flush=True)
         deadline = time.monotonic()+seconds
         while time.monotonic() < deadline:
             sleep(min(.5, deadline-time.monotonic()))
@@ -215,6 +237,7 @@ def main():
     parser.add_argument("--user", default="medvetalkie")
     parser.add_argument("--seconds", type=int, default=30)
     parser.add_argument("--latency-ms", type=int, default=80)
+    parser.add_argument("--diagnose", action="store_true", help="read-only live module and stream snapshot")
     parser.add_argument("--dry-run", action="store_true",
                         help="validate both headsets and show routes without audio changes")
     args = parser.parse_args()
@@ -234,7 +257,7 @@ def main():
             raise KeyboardInterrupt
         signal.signal(signal.SIGTERM, on_term)
         try:
-            bridge(plan, args.user, args.seconds, args.latency_ms)
+            bridge(plan, args.user, args.seconds, args.latency_ms, diagnose=args.diagnose)
         finally:
             signal.signal(signal.SIGTERM, previous)
         print("Bridge stopped; test routes removed.")
