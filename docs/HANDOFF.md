@@ -922,3 +922,16 @@ Operator re-ran the headless `--dry-run` after synchronized PTY fix; it still re
 
 Replaced `controller_inventory` in `platform/bluetooth/medvetalkie-intercom-test.py` with **read-only BlueZ D-Bus via system `busctl`**. Read `org.bluez` object tree, locate `/org/bluez/hciN` adapters and exact device objects for both supplied headset MACs; read each adapter `org.bluez.Adapter1.Address` and each device `org.bluez.Device1.Connected`. Require each target headset to be connected to exactly one distinct adapter MAC before any audio mutation. No PTY, prompt parsing or `bluetoothctl -i` used in the intercom path. Other legacy/menu CLI tooling is independent and remains hardware-unverified.
 Added D-Bus topology mocks and absent/disconnected cases to `tests/test_bt_intercom.py`. CI and real Orange Pi dry-run still must be checked for this latest change. If `busctl` unavailable, install/verify it before accepting an automated bridge. Preserve existing headset bonds and audio profiles.
+
+
+## First physical dual-headset intercom dry-run PASSED — 2026-11-25
+
+Operator on Orange Pi Zero 3 pulled the D-Bus-based intercom script up to `ce11642` and ran:
+`sudo python3 platform/bluetooth/medvetalkie-intercom-test.py --a 41:42:63:27:E7:3A --b B0:F0:0C:63:83:F5 --dry-run`.
+
+The real hardware stdout confirmed success:
+- A AIRIDE N1 `41:42:63:27:E7:3A` on USB adapter `F4:4E:FC:57:69:64`, active `headset-head-unit`, `bluez_input.41:42:63:27:E7:3A`, `bluez_output.41_42_63_27_E7_3A.1`.
+- B UGREEN Studio Pro `B0:F0:0C:63:83:F5` on USB adapter `F4:4E:FC:2D:FD:4B`, active `headset-head-unit`, `bluez_input.B0:F0:0C:63:83:F5`, `bluez_output.B0_F0_0C_63_83_F5.1`.
+- `A microphone -> B speaker; B microphone -> A speaker`; target loopback latency 80 ms; final `DRY RUN: no PipeWire modules were changed.`
+
+This is the **first operator-confirmed physical dry-run success** for both concurrently connected HFP headsets and their scoped cross-routing plan. The D-Bus controller verification fixed the prior false timeout. Do NOT label the intercom's live PCM full-duplex audio as tested yet: user still needs to run an explicit bounded 30s live bridge, listen in both directions, and confirm two modules unloaded on exit, then assess echo, quality, interruption, delay and HCI trace. TUI remains unaccepted; main branch untouched.
