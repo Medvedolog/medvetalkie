@@ -159,7 +159,7 @@ def interact_bluetooth(controller, verb, device, answer_fn, event_fn, seconds=60
             event_fn(chunk)
             lower=buffer.lower()
             # Prompt may be displayed without a trailing newline.
-            prompt = re.search(r"(?:Enter PIN code|Enter passkey|Confirm passkey|Request confirmation|Authorize service|Accept pairing|Confirm value)[^\\r\\n]{0,130}", buffer, re.I)
+            prompt = re.search(r"(?:Enter PIN code|Enter passkey|Confirm passkey|Request confirmation|Authorize service|Accept pairing|Confirm value)[^\r\n]{0,130}", buffer, re.I)
             if prompt:
                 question=prompt.group(0)
                 answer=answer_fn(question)
