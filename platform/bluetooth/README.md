@@ -50,8 +50,15 @@ To discover paired/connected devices per controller (no TUI):
 
 ```sh
 bluetoothctl list
-bluetoothctl -i F4:4E:FC:57:69:64 devices Connected
-bluetoothctl -i F4:4E:FC:2D:FD:4B devices Connected
+bluetoothctl
+# Inside bluetoothctl:
+# select F4:4E:FC:57:69:64
+# devices Connected
+# devices Paired
+# select F4:4E:FC:2D:FD:4B
+# devices Connected
+# devices Paired
+# quit
 ```
 
 First verify using your actual second headset MAC:
@@ -72,3 +79,8 @@ sudo python3 platform/bluetooth/medvetalkie-intercom-test.py \
 Wear both headsets and test speech both ways, including overlapping speech. `--latency-ms` is a target and **not** a measured one-way or round-trip delay. Check subjective echo/volume/interruptions; neither low-latency performance nor sustained duplex on two ATS2851 adapters is validated yet.
 
 **Safety:** The bridge must refuse one headset on both sides, disconnected devices, devices on the same controller, unavailable HFP profile, or multiple competing sources/sinks. It creates *only* two loopback modules and unloads **only its own** allocated module IDs. If a process is killed uncleanly (e.g. SIGKILL/power loss) or cleanup fails, run `pactl list short modules` in the `medvetalkie` audio session and manually remove only the orphaned module-loopback IDs after confirming ownership; do not blindly unload all audio modules. Use `Ctrl+C` to request clean shutdown. This is a controlled hardware validation harness, not a production background intercom daemon.
+
+
+## BlueZ 5.82 CLI compatibility (important)
+
+The Orange Pi has BlueZ 5.82. **There is no `bluetoothctl -i` option.** Controller selection is performed **inside the same `bluetoothctl` session** using `select <controller MAC>`, followed by `devices Connected`, `devices Paired`, `info <device MAC>` or other commands. The headless bridge and menu's inventory use `platform/bluetooth/bluez_cli.py` to run scoped, read-only commands and verify controller selection, avoiding accidental queries on the default adapter. Regression: `python3 tests/test_bluez_cli.py`. Operator-confirmed inventory output is still required for hardware acceptance.
