@@ -95,17 +95,26 @@ with tempfile.TemporaryDirectory(prefix='medvetalkie-saver-check-') as temp:
     result = run([str(spi_test), str(asset)])
     assert result.returncode == 0, result.stderr
     print(result.stdout.strip())
-    for option, value in [('--spi-mhz','4'),('--spi-mhz','8'),('--fps','25'),('--fps','60')]:
+    for option, value in [('--spi-mhz','4'),('--spi-mhz','8'),('--fps','25'),('--fps','60'),
+                          ('--status-seconds','1'),('--status-seconds','30'),('--status-seconds','120')]:
         result = run([str(binary), '--preview', str(preview), option, value], env=env)
         assert result.returncode == 0, result.stderr
     for option, value in [('--spi-mhz','0'),('--spi-mhz','17'),('--spi-mhz','4.5'),
-                          ('--spi-mhz','oops'),('--fps','0'),('--fps','61')]:
+                          ('--spi-mhz','oops'),('--fps','0'),('--fps','61'),
+                          ('--status-seconds','0'),('--status-seconds','121'),
+                          ('--status-seconds','bad')]:
         assert run([str(binary), '--preview', str(preview), option, value], env=env).returncode == 2
     assert run([str(binary), '--preview', str(preview)],
                env=dict(env,MEDVETALKIE_SPI_MHZ='8',MEDVETALKIE_FPS='30')).returncode == 0
     assert run([str(binary), '--preview', str(preview)],
                env=dict(env,MEDVETALKIE_SPI_MHZ='bad')).returncode == 2
-    print('PASS settings: SPI/FPS options, cron environment and invalid values')
+    assert run([str(binary), '--preview', str(preview)],
+               env=dict(env, MEDVETALKIE_STATUS_SECONDS='30')).returncode == 0
+    assert run([str(binary), '--preview', str(preview), '--status-seconds', '1'],
+               env=dict(env, MEDVETALKIE_STATUS_SECONDS='bad')).returncode == 2
+    assert run([str(binary), '--preview', str(preview)],
+               env=dict(env, MEDVETALKIE_STATUS_SECONDS='121')).returncode == 2
+    print('PASS settings: SPI/FPS/status-seconds CLI and environment bounds')
 
 
     # A failed HTTPS status must never set time even when it carries a Date.
