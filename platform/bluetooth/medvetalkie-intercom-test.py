@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 import time
+from bluez_cli import selected as selected_bluez
 
 MAC_RE = re.compile(r"^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 CONTROLLER_RE = re.compile(r"^Controller\s+((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})", re.M)
@@ -69,8 +70,7 @@ def controller_inventory(executor=run):
     if len(controllers) < 2:
         raise BridgeError("Two BlueZ controllers are required; found %d" % len(controllers))
     for controller in controllers:
-        devices = parse_devices(executor(
-            ["bluetoothctl", "-i", controller, "devices", "Connected"]))
+        devices = parse_devices(selected_bluez(controller, "devices Connected"))
         for device in devices:
             membership.setdefault(device, set()).add(controller)
     return membership
