@@ -133,12 +133,21 @@ def execute(mac, user="medvetalkie", seconds=10, monitor=False, outdir=None):
         raise RuntimeError("btmon requires root and installed bluez tools")
     directory = Path(outdir or tempfile.mkdtemp(prefix="medvetalkie-bt-"))
     directory.mkdir(parents=True, exist_ok=True)
+    if os.geteuid() == 0:
+        uid = pwd.getpwnam(user).pw_uid
+        gid = pwd.getpwnam(user).pw_gid
+        if not outdir:
+            os.chown(directory, uid, gid)
+            os.chmod(directory, 0o700)
+        elif directory.stat().st_uid != uid:
+            raise RuntimeError("For root execution, --outdir must be owned by audio user")
     # Avoid overwriting an earlier test on purpose.
     capture = directory / "headset-capture.wav"
     playback = directory / "test-pips.wav"
     if capture.exists() or playback.exists():
         raise FileExistsError("Existing bench files in %s" % directory)
     tone(playback, seconds)
+    os.chmod(playback, 0o644)
     monitor_file = directory / "hci.btsnoop"
     mon = rec = play = None
     started = time.monotonic()
