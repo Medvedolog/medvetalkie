@@ -29,3 +29,6 @@ jobs:
 
       - name: Cross-headset PCM isolation checks
         run: python3 -m py_compile platform/bluetooth/cross_pcm_isolation.py && python3 tests/test_cross_pcm_isolation.py
+
+      - name: Measured Bluetooth PCM relay offline tests
+        run: python3 -m py_compile platform/bluetooth/medvetalkie-pcm-relay.py && python3 tests/test_bt_pcm_relay.py
