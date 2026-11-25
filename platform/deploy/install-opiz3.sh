@@ -203,7 +203,11 @@ python3 "$SOURCE_DIR/platform/display/screensaver/test-screensaver.py"
 if [[ "$MODE" == apply ]] && ! id medvetalkie >/dev/null 2>&1; then
  useradd --system --user-group --home-dir /nonexistent --shell /usr/sbin/nologin medvetalkie
 fi
-mkdir -p "$PREFIX/releases" "$UNIT_DIR" "$BACKUP_DIR"
+# Root stages releases, but the Core/Web/status systemd units run as a
+# dedicated non-root user. Every parent directory and the final release
+# must be searchable by that user. NEVER relax StateDirectory/RuntimeDirectory.
+install -d -m 0755 "$PREFIX" "$PREFIX/releases" "$UNIT_DIR"
+install -d -m 0700 "$BACKUP_DIR"
 revision="$(git -C "$SOURCE_DIR" rev-parse --short HEAD 2>/dev/null || echo local)"
 release="$PREFIX/releases/$(date -u +%Y%m%dT%H%M%SZ)-$revision-$$"
 STAGE="$(mktemp -d "$PREFIX/releases/.stage.XXXXXXXX")"
@@ -214,6 +218,11 @@ for binary in medvetalkied medvetalkie-web medvetalkie-display-status medvetalki
 done
 install -m 0644 "$SOURCE_DIR/platform/display/medvetalkie-screensaver.sh" "$STAGE/medvetalkie-screensaver.sh"
 printf 'source_revision=%s\n' "$revision" >"$STAGE/MANIFEST"
+# mktemp -d uses 0700. Leaving that mode in a release breaks every
+# systemd User=medvetalkie service with a 203/EXEC or access failure.
+# Only executables and release directories are public; private settings,
+# IPC, and rollbacks remain 0700 in their separate systemd directories.
+chmod 0755 "$STAGE" "$STAGE/bin"
 OLD_RELEASE=""
 [[ ! -L "$PREFIX/current" ]] || OLD_RELEASE="$(readlink "$PREFIX/current")"
 
@@ -246,7 +255,16 @@ restore_failure() {
  trap - ERR INT TERM
  set +e
  if ((CHANGED)); then
-   log "Activation failed ($code), restoring release and service definitions"
+   log "Activation failed ($code). Diagnostics BEFORE rollback:"
+   # Record unit status and recent errors while the attempted release
+   # and its service processes are still present. Diagnostic failures
+   # must never block the rollback.
+   systemctl --no-pager --full status medvetalkie-core.service medvetalkie-status.service medvetalkie-web.service || :
+   journalctl --no-pager --output=short-iso -n 45 \
+     -u medvetalkie-core.service -u medvetalkie-status.service \
+     -u medvetalkie-web.service || :
+   ls -ld "$PREFIX" "$PREFIX/releases" "$release" "$release/bin" || :
+   log "Restoring the previous release and service definitions"
    for unit in $(units); do systemctl stop "$unit" >/dev/null 2>&1 || :; done
    if [[ -n "$OLD_RELEASE" && -d "$OLD_RELEASE" ]]; then
      ln -sfn "$OLD_RELEASE" "$PREFIX/current"
@@ -270,6 +288,13 @@ trap restore_failure ERR INT TERM
 CHANGED=1
 for unit in $(units); do systemctl stop "$unit" >/dev/null 2>&1 || :; done
 mv "$STAGE" "$release"; STAGE=""
+# Verify the *actual service user* can traverse the entire installed
+# /opt path before we replace services or modify the current symlink.
+command -v runuser >/dev/null || die "runuser missing: cannot verify non-root release access"
+for binary in medvetalkied medvetalkie-web medvetalkie-display-status; do
+  runuser -u medvetalkie -- test -x "$release/bin/$binary" ||
+    die "medvetalkie user cannot execute $release/bin/$binary"
+done
 for unit in $(units); do
  install -m 0644 "$SOURCE_DIR/platform/deploy/systemd/$unit" "$UNIT_DIR/$unit.next"
  mv -f "$UNIT_DIR/$unit.next" "$UNIT_DIR/$unit"
