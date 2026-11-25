@@ -130,6 +130,40 @@ activation; no boot/network changes are made. Do **not** enable the
 display in this first retrial: inspect the systemd status, actual USB
 inventory, BlueZ observation and generated `MTSTATUS1` snapshot first.
 
+## Physical bench: second install reached systemd, health-check failed
+
+On 25 November 2026, the full ARM64 build, **10/10 CTest**, Bjorni
+renderer and SPI simulation passed on the actual OPiZ3. The installer
+then activated systemd but failed Web/Core health and correctly rolled
+back. Code review identified a real deployment permission defect:
+`umask 077` and `mktemp -d` left the root-owned /opt release directories
+at `0700`, inaccessible to the `User=medvetalkie` services.
+
+The updated installer makes **only binary/release directories**
+searchable (`0755`), validates Core/Web/status executability using
+`runuser -u medvetalkie` before replacing live service definitions,
+and prints actual journal/systemctl diagnostics **before** rollback
+in the event of another failure. It does not loosen SQLite/IPC/backup
+privacy or modify onboard UWE5622 configuration.
+
+On the existing board the dependencies are already installed, so
+after updating the same branch over the mixed proxy, retry without APT
+and without display:
+
+```sh
+cd ~/medvetalkie
+PROXY=http://192.168.11.100:10880
+git -c http.proxy="$PROXY" pull --ff-only
+sudo bash platform/deploy/install-opiz3.sh --apply --skip-packages --proxy "$PROXY"
+```
+
+If activation fails again, **capture the full failure output**,
+including the new `systemctl status` and `journalctl` data printed
+before the automatic rollback. Verify `date -u`/`timedatectl status`
+separately; the earlier NTP clock and missing Armbian signing key
+remain independent unresolved maintenance issues. Never disable APT
+signature checks.
+
 ## 5. Current technical limitations
 
 - The installed WebUI is read-only, loopback-only and unauthenticated;
