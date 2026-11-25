@@ -793,3 +793,14 @@ Operator supplied actual post-install output from the physical Orange Pi Zero 3 
 - Added `tests/test_bt_tui.py` offline mocks and a GitHub Actions job step (`python3 -m py_compile` + tests). This validates CLI parsing/safety at CI level; neither live RFCOMM/SCO nor the actual SSH-TUI execution is proved.
 - **Observed failure motivating tool:** `AIRIDE N1` MAC `41:42:63:27:E7:3A` previously paired/trusted, advertised Handsfree UUID `0000111e`, but BlueZ connect failed `br-connection-profile-unavailable`. Investigate Audio Gateway profile registration in headless WirePlumber and BlueZ before further retries. Do not delete existing bonds.
 - Next steps: confirm CI green; pull tool on physical OPiZ3, run TUI and validate terminal behavior, scan and log output. Then implement an explicitly opt-in active HFP/SCO/PCM test; current TUI only checks prerequisites and connection attempts.
+
+
+## First real AIRIDE N1 USB-Bluetooth audio connection — 2026-11-25
+
+Operator applied per-user WirePlumber configuration under `/home/medvetalkie/.config/wireplumber/wireplumber.conf.d/51-medvetalkie-bluetooth.conf` (previously proposed headless `monitor.bluez.seat-monitoring = disabled`, `bluez5.roles = [ a2dp_source hfp_ag ]`, `bluez5.hfphsp-backend = "native"`), restarted only the user's `wireplumber.service`, and connected an existing paired/trusted AIRIDE N1 without re-pairing.
+
+**Physical evidence:** `bluetoothctl select F4:4E:FC:57:69:64`; `connect 41:42:63:27:E7:3A` returned `Connection successful`; kernel/BlueZ reported `hci0 ... type BR/EDR connected`, `Device1.Connected=yes`, `ServicesResolved=yes`, new A2DP SEPs and transport `/org/bluez/hci0/dev_41_42_63_27_E7_3A/sep1/fd0` (volume 127). BlueZ `Battery Percentage: 0x46 (70)`. The earlier `br-connection-profile-unavailable` failure was not reproduced after WirePlumber configuration; this temporal association does not independently prove the exact root cause.
+
+**Still NOT verified:** HFP/HSP profile selection, SCO/eSCO connection, input microphone source, active sample transport or two-way voice. No second headset test performed. `journalctl _UID=1000 --user-unit=wireplumber.service` showed no entries (wrong/empty journal selector is not evidence of no warnings).
+
+Next: inspect the actual `bluez_card.41_42_63_27_E7_3A` card profile list under the `medvetalkie` user's PipeWire Pulse socket. If HFP profile is available, use only that exact profile with `pactl set-card-profile` (explicit hardware test) and then inspect Bluetooth sink/source and SCO HCI events. Preserve existing bonding and display/network state.
