@@ -640,6 +640,8 @@ has been supplied yet. HFP/SCO remains unverified.
 - The fix is **not yet physically installed or verified**;
   green CI and board retry status must be recorded separately.
 
+**CI confirmation:** [GitHub Actions 45606655980](https://github.com/Medvedolog/medvetalkie/actions/runs/45606655980) passed all **10/10 CTest**, Bjorni/ST7789 renderer suite, and staged installer simulation including newly added cron.d watchdog fixture tests. Wi-Fi safety and upstream UWE5622 patch audits also passed on the related commit. The real board has **not** yet received this follow-up cron.d preflight fix; physical success remains pending.
+
 **Next physical steps:** archive the actual file from
 `/etc/cron.d` to `/root`, stop only the confirmed
 currently-running legacy process group, verify
