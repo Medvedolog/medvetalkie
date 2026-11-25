@@ -363,3 +363,55 @@ The pasted terminal command prefixed by bracketed-paste bytes
 `^[[200~` failed to run `ps`, and `cat /proc/1026/cgroup~`
 had a stray tilde. These are terminal input artifacts, not device
 or process faults.
+
+
+## 14. First successful opt-in display-service activation on physical OPiZ3 — 2026-11-25
+
+**User-provided physical SSH log:**
+
+- Operator backed up root crontab as
+  `/root/medvetalkie-crontab.backup`, applied a filter that comments
+  any active job containing `/run/medvetalkie-screensaver.lock`,
+  and checked with `sudo crontab -l | grep`; that last command printed
+  **no matching line**, so the log alone does not prove an actual
+  crontab entry was modified. The previously observed legacy PIDs
+  `690,694,1026` were absent from `ps` at this check. There was
+  no remaining process shown from that specific old chain.
+- `git -c http.proxy=http://192.168.11.100:10880 pull --ff-only`
+  reported **Already up to date**.
+- On real Orange Pi Zero 3, operator executed
+  `sudo bash platform/deploy/install-opiz3.sh --apply
+  --skip-packages --proxy http://192.168.11.100:10880
+  --enable-display`.
+- Native GCC/ARM64 build, **10/10 CTest**, and the independent
+  Bjorni/ST7789 render, display-status, SPI-mock, clock, launcher
+  and supervisor regression suite all passed.
+- Installer printed `INSTALLED:
+  /opt/medvetalkie/releases/20261125T112540Z-daf4364-20155`,
+  `Units: medvetalkie-core/status/web; display=1`; previous release
+  `/opt/medvetalkie/releases/20261125T110937Z-daf4364-11380`;
+  services were restarted, `--enable-display` enabled and started
+  its unit, and installer completed its Core/Web and status-file
+  health gates. Kernel, blacklist, boot and Ethernet remain unchanged.
+- This is an installation/activation **success**, not physical
+  confirmation of the observed LCD image. No
+  `systemctl status medvetalkie-display` / journal or on-screen
+  observation was supplied yet. Before claiming 8-second transition
+  verification, collect `systemctl status medvetalkie-display`,
+  `journalctl -u medvetalkie-display -n 60 --no-pager`,
+  `sudo fuser -v /dev/spidev1.0` and a direct observation/photo:
+  Russian status dashboard on startup, then animated Bjorni after
+  roughly 8 seconds in STANDBY. If renderer uses the only SPA/GPIO
+  pins, avoid running a second owner concurrently.
+- Live two-controller USB/BlueZ inventory and Core/status/Web were
+  validated in the prior hardware session; the second activation did
+  not include a new Bluetooth diagnostic dump. HFP/SCO full-duplex
+  audio and headset roles remain unverified.
+- The unsynchronized system clock and the Armbian missing signing key
+  remain independent outstanding maintenance faults; `--skip-packages`
+  avoids APT in this run and does not repair them.
+
+**Next gate:** verify physical ST7789 status/idle transition and exclusive
+SPI ownership; only then test real headset connection/HFP/SCO.
+Maintain a single active work branch and Draft PR #1, no main merge
+until hardware acceptance criteria are met.
