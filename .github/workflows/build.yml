@@ -23,3 +23,6 @@ jobs:
 
       - name: Bluetooth SSH TUI offline tests
         run: python3 -m py_compile platform/bluetooth/medvetalkie-bt-tui.py platform/bluetooth/medvetalkie-bt-menu.py platform/bluetooth/bt_audio_bench.py && python3 tests/test_bt_tui.py && python3 tests/test_bt_menu.py
+
+      - name: Headless intercom offline safety and routing tests
+        run: python3 -m py_compile platform/bluetooth/medvetalkie-intercom-test.py && python3 tests/test_bt_intercom.py
