@@ -334,6 +334,14 @@ def main():
     parser.add_argument("--queue-frames",type=int,default=QUEUE_FRAMES)
     parser.add_argument("--gain-a-to-b",type=float,default=1.0)
     parser.add_argument("--gain-b-to-a",type=float,default=1.0)
+    parser.add_argument("--report-interval",type=int,default=1,
+                        help="progress report every 1..30 seconds")
+    parser.add_argument("--gate-dbfs",type=float,
+                        help="opt-in speech gate -70..-20dBFS, disabled by default")
+    parser.add_argument("--gate-floor",type=float,default=0.15,
+                        help="quiet-frame amplitude multiplier 0..1, not AEC")
+    parser.add_argument("--gate-hang-ms",type=int,default=300,
+                        help="keep gate open after speech in 20ms multiples, 0..2000")
     parser.add_argument("--dry-run",action="store_true")
     args=parser.parse_args()
     try:
@@ -343,6 +351,17 @@ def main():
             raise ValueError('Gains must be finite 0.25..1.0')
         if not 40 <= args.latency_ms <= 500:
             raise ValueError('Latency must be 40..500ms')
+        if not 5 <= args.seconds <= MAX_SECONDS:
+            raise ValueError("Seconds must be 5..600")
+        if not 1 <= args.report_interval <= 30:
+            raise ValueError("report-interval must be 1..30")
+        if args.gate_dbfs is not None and (not math.isfinite(args.gate_dbfs)
+                or not -70 <= args.gate_dbfs <= -20):
+            raise ValueError("gate-dbfs must be finite and -70..-20")
+        if not math.isfinite(args.gate_floor) or not 0 <= args.gate_floor <= 1:
+            raise ValueError("gate-floor must be 0..1")
+        if not 0 <= args.gate_hang_ms <= 2000 or args.gate_hang_ms % FRAME_MS:
+            raise ValueError("gate-hang-ms must be 0..2000 and divisible by 20")
         plan=MT.validate(args.a,args.b,args.user)
         routes=choose_routes(plan,args.direction)
         print("16 kHz s16le mono, 20ms frames, %dms bounded queue; latency target %dms"%(args.queue_frames*20,args.latency_ms))
@@ -350,7 +369,9 @@ def main():
         if args.dry_run:
             print("DRY RUN: no audio streams started")
             return
-        execute(plan,args.direction,args.user,args.seconds,args.latency_ms,args.queue_frames,args.gain_a_to_b,args.gain_b_to_a)
+        execute(plan,args.direction,args.user,args.seconds,args.latency_ms,
+                args.queue_frames,args.gain_a_to_b,args.gain_b_to_a,args.report_interval,
+                args.gate_dbfs,args.gate_floor,args.gate_hang_ms)
     except (ValueError,RuntimeError,OSError,KeyError) as exc:
         parser.exit(2,"FAILED: "+str(exc)+"\n")
     except KeyboardInterrupt:
