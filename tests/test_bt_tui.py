@@ -27,12 +27,12 @@ class TuiTests(unittest.TestCase):
     def test_known_airide_first(self):
         output = ("Device 00:9E:C8:92:D4:99 MIBOX3\n"
                   "Device 41:42:63:27:E7:3A AIRIDE N1\n")
-        with patch.object(mod, "run", return_value=(0, output)) as call:
+        with patch.object(mod, "selected_bluez", return_value=output) as call:
             result, error = mod.discovered("F4:4E:FC:57:69:64")
         self.assertFalse(error)
         self.assertEqual(result[0]["name"], "AIRIDE N1")
-        self.assertEqual(call.call_args.args[0][:3],
-                         ["bluetoothctl", "-i", "F4:4E:FC:57:69:64"])
+        self.assertEqual(call.call_args.args[:2],
+                         ("F4:4E:FC:57:69:64", "devices"))
 
     def test_no_scan_without_controller(self):
         bench = mod.Bench()
