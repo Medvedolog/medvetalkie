@@ -415,3 +415,36 @@ or process faults.
 SPI ownership; only then test real headset connection/HFP/SCO.
 Maintain a single active work branch and Draft PR #1, no main merge
 until hardware acceptance criteria are met.
+
+
+## 15. Physical UI expectation corrected — 2026-11-25
+
+After successful `display=1` installation, the operator reports:
+**"я не увидел новое меню"** (did not see the new menu).
+
+Source inspection establishes that **no interactive SPI menu has been
+implemented or installed yet**. `src/medvetalkie-ui/main.c` is still
+the one-function `mt_scaffold_main` placeholder; no joystick/GPIO
+navigation, settings controls, pairing commands or interactive
+LVGL renderer are registered as a systemd UI service. The installed
+`medvetalkie-display.service` runs the combined self-contained C11
+ST7789 screensaver with an **informational dashboard**, not a menu.
+
+In `platform/display/screensaver/screensaver.c`, after reading fresh
+`MTSTATUS1`, the status dashboard is visible only for **8 seconds**
+following service start or a state change while `mode=STANDBY` and
+`fault=NONE`. Then Bjorni takes over. With the observed persistent
+STANDBY (unassigned headsets, `voice=NOT_VERIFIED`), the dashboard
+can easily be missed. Restart `medvetalkie-display.service` without
+reinstalling to observe the initial 8-second status screen; if absent,
+collect `systemctl status` and `journalctl`, actual SPI ownership,
+and direct physical panel observation. This test has not yet been
+reported by the operator.
+
+**Implementation debt:** real navigable on-device menu and digital
+5-way joystick + four context button input abstraction as specified
+in `docs/MedveTalkie_TZ_v1.4.md` are a *future development stage*.
+Do not claim this functionality, LVGL readiness, writable settings,
+HFP pairing actions, or audio routing based on the current
+display-only screen. Keep a single SPI renderer owner and shared Core
+IPC before building this stage.
