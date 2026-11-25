@@ -9,14 +9,14 @@ for arg in "$@"; do
         --help)
             cat <<'HELP'
 Bjorni screensaver for Orange Pi Zero 3 + MSP2008/ST7789.
-Run: bash medvetalkie-screensaver.sh [--spi-mhz 4] [--fps 25] [--bgr] [--no-sync] [--status-file /run/medvetalkie/display.status]
+Run: bash medvetalkie-screensaver.sh [--spi-mhz 4] [--fps 25] [--bgr] [--no-sync] [--status-file /run/medvetalkie/display.status] [--status-seconds 30]
 Default SPI: 1 MHz. Faster wiring trials: 4, then 8 MHz; return to 1 for artifacts.
-MEDVETALKIE_SPI_MHZ and MEDVETALKIE_FPS also set these options (including cron).
+MEDVETALKIE_SPI_MHZ, MEDVETALKIE_FPS and MEDVETALKIE_STATUS_SECONDS also set these options.
 Stop: Ctrl+C. No autostart is installed.
 Time: system local timezone; HTTPS check at startup and every 15 minutes.
 MEDVETALKIE_PROXY defaults to http://192.168.11.100:10880.
 MEDVETALKIE_TZ can override the timezone, e.g. Europe/Moscow.
-Status file: MTSTATUS1, atomically updated by display-status bridge.\nWhen in STANDBY, show status for 8 s, then Bjorni; errors/active modes show status.\nPreview without hardware or clock changes: --preview FILE.ppm --frame SECONDS
+Status file: MTSTATUS1, atomically updated by display-status bridge.\nWhen in STANDBY, show status for 8 s by default (1-120 s configurable), then Bjorni; errors/active modes show status.\nPreview without hardware or clock changes: --preview FILE.ppm --frame SECONDS
 HELP
             exit 0 ;;
         --no-sync) sync_enabled=0 ;;
