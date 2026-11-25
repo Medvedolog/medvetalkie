@@ -8,6 +8,7 @@ L full log, Q quit. Does not alter display, network or system configuration.
 import curses
 import importlib.util
 from pathlib import Path
+from bluez_cli import selected as selected_bluez, BluezCommandError
 import os
 import queue
 import re
@@ -67,10 +68,10 @@ def controllers():
 
 def discovered(controller):
     # Display cache is per selected adapter when supported by bluetoothctl.
-    args = ["bluetoothctl", "-i", controller, "devices"]
-    code, output = run(args, 10)
-    if code:
-        return [], output
+    try:
+        output = selected_bluez(controller, "devices", timeout=10)
+    except (BluezCommandError, ValueError) as exc:
+        return [], str(exc)
     found = []
     for line in output.splitlines():
         m = re.search(r"Device\s+(" + MAC.pattern + r")(?:\s+(.*))?$", line)
@@ -224,8 +225,7 @@ class Bench:
             return
         if kind == "scan":
             self.work("Поиск BR/EDR (~12 с)", lambda: (
-                "scan", run(["bluetoothctl", "-i", mac, "--timeout", "12",
-                             "scan", "bredr"], 17)))
+                "scan", run(["bluetoothctl", "--timeout", "12", "scan", "bredr"], 17)))
         elif kind in ("info", "connect", "pair"):
             if not device:
                 self.notice = "Сначала обнаружьте устройство"
@@ -237,7 +237,7 @@ class Bench:
                 self.notice = "Подтвердить PAIR %s? Y — да, N — отмена" % addr
                 return
             self.work("%s %s" % (kind.upper(), addr), lambda: (
-                kind, run(["bluetoothctl", "-i", mac, kind, addr],
+                kind, run(["bluetoothctl", kind, addr],
                           45 if kind == "pair" else 20)))
         elif kind == "audio":
             self.work("Диагностика PipeWire", lambda: ("audio", (0, audio_check())))
@@ -351,8 +351,7 @@ class Bench:
                 self.pending_pair = None
                 if key in (ord("y"), ord("Y")):
                     self.work("PAIR %s" % target, lambda: (
-                        "pair", run(["bluetoothctl", "-i", self.current_mac(),
-                                     "pair", target], 45)))
+                        "pair", run(["bluetoothctl", "pair", target], 45)))
                 else:
                     self.notice = "Сопряжение отменено"
                 time.sleep(0.07)
