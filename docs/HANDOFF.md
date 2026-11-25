@@ -891,3 +891,10 @@ Operator discovered `UGREEN Studio Pro` (MAC `B0:F0:0C:63:83:F5`) through USB co
 **Blocker:** At the end of operator's transcript `devices Connected` on first controller `F4:4E:FC:57:69:64` is **empty**, whereas second controller lists UGREEN Studio Pro. Therefore simultaneous dual-link connectivity has NOT yet been demonstrated. Reconnect prior AIRIDE N1 (`41:42:63:27:E7:3A`) explicitly on first controller using interactive `bluetoothctl select ...` then `connect ...`, and verify both `devices Connected` lists in the same session. Do not remove pairings or modify BT services.
 
 Next after two concurrent connections: inspect both `bluez_card` entries using `pactl list cards` as audio user; select `headset-head-unit` mSBC for UGREEN if available, restore AIRIDE HFP if reverted, confirm both `bluez_input` and `bluez_output`, run `medvetalkie-intercom-test.py --dry-run`, then explicit bounded 30-second bridge test. A2DP endpoint creation alone does not prove UGREEN HFP SCO input/output or microphone performance.
+
+
+## Both USB controllers simultaneously hold distinct headset BR/EDR connections — 2026-11-25
+
+Physical operator session explicitly verified `bluetoothctl select F4:4E:FC:57:69:64`; `connect 41:42:63:27:E7:3A` returned `Connection successful` and `devices Connected` listed `AIRIDE N1`. Without disconnecting it, operator selected `F4:4E:FC:2D:FD:4B` and `devices Connected` listed `B0:F0:0C:63:83:F5 UGREEN Studio Pro`. **Dual USB Bluetooth BR/EDR connectivity is now physically demonstrated.** UGREEN Studio Pro earlier reported `Paired/Bonded/Trusted/Connected=yes`, Handsfree UUID and battery 80%.
+
+**Not yet tested:** simultaneous *HFP audio* across both adapters, dual PipeWire cards/sinks/sources, bidirectional bridge or packet continuity. Next request `pactl list cards` for both devices; activate `headset-head-unit` on each if offered, verify two BlueZ microphone and sink nodes, then invoke `medvetalkie-intercom-test.py --a 41:42:63:27:E7:3A --b B0:F0:0C:63:83:F5 --dry-run` before any real loopback test.
