@@ -61,7 +61,12 @@ class MenuTests(unittest.TestCase):
             if argv[-2:] == ["info", "41:42:63:27:E7:3A"]:
                 return 0, "Connected: yes\nPaired: yes\nRSSI: -48\n"
             return 0, "Connected: no\nPaired: no\n"
-        with patch.object(mod, "command", side_effect=fake):
+        def fake_selected(controller, query, timeout=12):
+            if query == "devices Paired": return "Device 41:42:63:27:E7:3A AIRIDE N1"
+            if query == "devices Connected": return "Device 41:42:63:27:E7:3A AIRIDE N1"
+            if query == "info 41:42:63:27:E7:3A": return "Connected: yes\nPaired: yes\nRSSI: -48\n"
+            return "Connected: no\nPaired: no\n"
+        with patch.object(mod, "selected_bluez", side_effect=fake_selected):
             merged, warnings = mod.enrich_devices("F4:4E:FC:57:69:64", first)
         self.assertEqual(warnings, [])
         self.assertEqual(merged[0]["name"], "AIRIDE N1")
