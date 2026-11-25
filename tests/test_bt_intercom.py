@@ -133,6 +133,28 @@ class BridgeTests(unittest.TestCase):
             mt.bridge(plan,"test",5,80,executor=fake,sleep=lambda _:None)
         self.assertEqual(unloaded,["42"])
 
+    def test_route_selection(self):
+        plan=mt.validate(A,B,"test",executor=fake_executor)
+        self.assertEqual(len(mt.route_pairs(plan, "both")), 2)
+        self.assertEqual(mt.route_pairs(plan, "a-to-b"),
+                         [(plan["A"]["source"], plan["B"]["sink"])])
+        self.assertEqual(mt.route_pairs(plan, "b-to-a"),
+                         [(plan["B"]["source"], plan["A"]["sink"])])
+        with self.assertRaises(mt.BridgeError):
+            mt.route_pairs(plan,"invalid")
+
+    def test_endpoint_levels_are_read_only(self):
+        plan=mt.validate(A,B,"test",executor=fake_executor)
+        seen=[]
+        def executor(argv):
+            seen.append(argv)
+            return "Volume: 100% / Mute: no"
+        result=mt.endpoint_levels(plan,"test",executor)
+        self.assertIn("A source volume",result)
+        self.assertIn("B sink mute",result)
+        self.assertEqual(len(seen),8)
+        self.assertTrue(all("get-" in argv[-2] for argv in seen))
+
     def test_read_only_live_diagnostics(self):
         seen=[]
         def reader(argv):
