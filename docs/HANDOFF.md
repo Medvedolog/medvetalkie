@@ -882,3 +882,12 @@ Fixes to `work/uwe5622-wifi-armbian`:
 - `tests/test_bluez_cli.py`, `tests/test_bt_intercom.py`, `tests/test_bt_menu.py`, `tests/test_bt_tui.py` and CI updated. Docs corrected to use interactive `bluetoothctl`, then `select F4:4E:FC:57:69:64`, `devices Connected`, `select F4:4E:FC:2D:FD:4B`, `devices Connected`.
 - CI succeeded for updated code/test commit `6e3b0afe` (one workflow run); no Orange Pi hardware retest after new checkout yet. `main` not touched.
 - Next: user pulls work branch and lists real devices via interactive bluetoothctl; then validate dry-run. Do not start live cross-routing without second headset actually connected to second USB adapter.
+
+
+## Second real Bluetooth headset: UGREEN Studio Pro — 2026-11-25
+
+Operator discovered `UGREEN Studio Pro` (MAC `B0:F0:0C:63:83:F5`) through USB controller `hci1` / `F4:4E:FC:2D:FD:4B`. Real BlueZ trace confirms pairing success, then brief `BR/EDR disconnected with reason 2`, followed by successful `trust` and `connect`: `Paired=yes, Bonded=yes, Trusted=yes, Connected=yes, ServicesResolved=yes`; `Handsfree` UUID `0000111e` advertised; BlueZ battery `0x50 = 80%`; A2DP SEP endpoints and transport created on `hci1`.
+
+**Blocker:** At the end of operator's transcript `devices Connected` on first controller `F4:4E:FC:57:69:64` is **empty**, whereas second controller lists UGREEN Studio Pro. Therefore simultaneous dual-link connectivity has NOT yet been demonstrated. Reconnect prior AIRIDE N1 (`41:42:63:27:E7:3A`) explicitly on first controller using interactive `bluetoothctl select ...` then `connect ...`, and verify both `devices Connected` lists in the same session. Do not remove pairings or modify BT services.
+
+Next after two concurrent connections: inspect both `bluez_card` entries using `pactl list cards` as audio user; select `headset-head-unit` mSBC for UGREEN if available, restore AIRIDE HFP if reverted, confirm both `bluez_input` and `bluez_output`, run `medvetalkie-intercom-test.py --dry-run`, then explicit bounded 30-second bridge test. A2DP endpoint creation alone does not prove UGREEN HFP SCO input/output or microphone performance.
