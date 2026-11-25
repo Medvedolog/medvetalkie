@@ -785,3 +785,11 @@ Operator supplied actual post-install output from the physical Orange Pi Zero 3 
 - `wpctl status` reports absent RTKit D-Bus service and fallback realtime priority; nonfatal for basic process startup, but latency/underrun behavior is untested. Consider `rtkit` with measured audio requirements.
 - **Confirmed:** headless audio service is reachable on the live board at this moment. **Unverified:** persistence after reboot, WirePlumber Bluetooth headset profile, SCO/eSCO setup, microphone PCM, full duplex, and audio stream routing.
 - **Next gate:** explicitly pair one AIRIDE N1 with one selected Bluetooth controller, inspect resulting BlueZ Device1 and PipeWire Bluetooth card/profile/source/sink; preserve bonds and avoid changing other controllers or existing display/network services. Then run an opt-in active audio test before claiming HFP readiness.
+
+
+## SSH Bluetooth interactive bench TUI — 2026-11-25
+
+- Added `platform/bluetooth/medvetalkie-bt-tui.py` (color curses TUI; only Python stdlib + BlueZ CLI) and `platform/bluetooth/README.md`. `sudo python3 platform/bluetooth/medvetalkie-bt-tui.py` from the work branch. Controller switch (1/2), asynchronous timed BR/EDR scan, BlueZ-cache refresh and selected device inspection, explicit connect, pairing with extra confirmation, PipeWire-card diagnostic, animated activity indicator and logs. The indicator is indeterminate activity, **not percentage progress**. No SPI/GPIO, BlueZ service restarts, automatic bond deletes, profile changes or core/network updates.
+- Added `tests/test_bt_tui.py` offline mocks and a GitHub Actions job step (`python3 -m py_compile` + tests). This validates CLI parsing/safety at CI level; neither live RFCOMM/SCO nor the actual SSH-TUI execution is proved.
+- **Observed failure motivating tool:** `AIRIDE N1` MAC `41:42:63:27:E7:3A` previously paired/trusted, advertised Handsfree UUID `0000111e`, but BlueZ connect failed `br-connection-profile-unavailable`. Investigate Audio Gateway profile registration in headless WirePlumber and BlueZ before further retries. Do not delete existing bonds.
+- Next steps: confirm CI green; pull tool on physical OPiZ3, run TUI and validate terminal behavior, scan and log output. Then implement an explicitly opt-in active HFP/SCO/PCM test; current TUI only checks prerequisites and connection attempts.
