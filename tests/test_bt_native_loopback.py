@@ -55,8 +55,9 @@ class NativeTests(unittest.TestCase):
         def runner(argv):
             self.assertIn("pw-dump",argv)
             return json.dumps(snapshot)
-        text, failures=module.inspect_live_graph(
-            "medvetalkie",[("a-to-b",PLAN["A"]["source"],PLAN["B"]["sink"])],runner)
+        with patch.object(module.INTERCOM,"audio_cli",return_value=["pw-dump"]):
+            text, failures=module.inspect_live_graph(
+                "medvetalkie",[("a-to-b",PLAN["A"]["source"],PLAN["B"]["sink"])],runner)
         self.assertEqual(failures,1)
         self.assertIn("MISMATCH",text)
 
@@ -71,8 +72,9 @@ class NativeTests(unittest.TestCase):
             {"id":12,"type":"PipeWire:Interface:Link",
              "info":{"output-node-id":10,"input-node-id":11,"state":"active"}}
         ]
-        text,failures=module.inspect_live_graph(
-            "medvetalkie",[("a-to-b",src,sink)],lambda argv: json.dumps(snapshot))
+        with patch.object(module.INTERCOM,"audio_cli",return_value=["pw-dump"]):
+            text,failures=module.inspect_live_graph(
+                "medvetalkie",[("a-to-b",src,sink)],lambda argv: json.dumps(snapshot))
         self.assertEqual(failures,0)
         self.assertIn("Graph links",text)
 
