@@ -21,6 +21,11 @@ class IsolationTests(unittest.TestCase):
                              ("out","in","headset-head-unit"))
         finder.assert_called_once_with(mod.A,"medvetalkie")
 
+    def test_replay_option_is_explicit_opt_in(self):
+        import inspect
+        parameter = inspect.signature(mod.test).parameters["replay"]
+        self.assertIs(parameter.default, False)
+
     def test_duration_rejected_before_audio_mutation(self):
         with patch.object(mod,"one_device") as probe:
             with self.assertRaises(ValueError):
