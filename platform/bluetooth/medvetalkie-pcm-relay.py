@@ -81,8 +81,8 @@ def pulse_args(user, program, endpoint, latency_ms=80):
 
 def scale_pcm(frame, gain):
     """Attenuate little-endian signed 16-bit PCM without modifying user audio settings."""
-    if not math.isfinite(gain) or not 0.25 <= gain <= 1.0:
-        raise ValueError("Gain must be 0.25..1.0")
+    if not math.isfinite(gain) or not 0 <= gain <= 1.0:
+        raise ValueError("PCM gain must be 0..1.0")
     if gain == 1.0:
         return frame
     samples=array("h")
