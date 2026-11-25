@@ -131,7 +131,7 @@ class PCMRelayTests(unittest.TestCase):
     def test_duration_rejected_before_creating_streams(self):
         with patch.object(mod.Route,"begin") as begin:
             with self.assertRaises(ValueError):
-                mod.execute({"A":{},"B":{}},"a-to-b","medvetalkie",120,80)
+                mod.execute({"A":{},"B":{}},"a-to-b","medvetalkie",601,80)
         begin.assert_not_called()
 
 
