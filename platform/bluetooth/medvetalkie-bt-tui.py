@@ -7,6 +7,7 @@ L full log, Q quit. Does not alter display, network or system configuration.
 """
 import curses
 import importlib.util
+import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bluez_cli import selected as selected_bluez, BluezCommandError
