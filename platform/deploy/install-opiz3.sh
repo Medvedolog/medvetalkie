@@ -173,6 +173,10 @@ if [[ "$MODE" == apply && "$SKIP_APT" == 0 ]]; then
 fi
 
 if [[ "$MODE" == apply && "$DISPLAY" == 1 ]]; then
+ # The hardware trial proved a cron.d watchdog can respawn a legacy
+ # renderer between the first SPI check and service activation.
+ sh "$SOURCE_DIR/platform/deploy/check-legacy-display-cron.sh" ||
+   die "Legacy cron.d display autostart must be disabled before --enable-display"
  # Even if the systemd display unit appears active, its current process may
  # only be compiling/restarting while a legacy cron screensaver holds SPI.
  # Verify every owner PID belongs to OUR display cgroup, otherwise stop
@@ -213,6 +217,7 @@ for binary in medvetalkied medvetalkie-web medvetalkie-display-status medvetalki
 done
 install -m 0644 "$SOURCE_DIR/platform/display/medvetalkie-screensaver.sh" "$STAGE/medvetalkie-screensaver.sh"
 install -m 0644 "$SOURCE_DIR/platform/deploy/check-display-owner.sh" "$STAGE/check-display-owner.sh"
+install -m 0644 "$SOURCE_DIR/platform/deploy/check-legacy-display-cron.sh" "$STAGE/check-legacy-display-cron.sh"
 printf 'source_revision=%s\n' "$revision" >"$STAGE/MANIFEST"
 chmod 0644 "$STAGE/MANIFEST"
 # mktemp -d uses 0700. Leaving that mode in a release breaks every
@@ -281,6 +286,14 @@ restore_failure() {
  fi
  exit "$code"
 }
+# Last preflight before stopping any existing healthy Core/Web service.
+# A once-per-minute cron watchdog can have restarted while CTest ran.
+if ((DISPLAY)); then
+ sh "$SOURCE_DIR/platform/deploy/check-legacy-display-cron.sh" ||
+   die "Legacy Bjorni cron watchdog became active during build; no services changed"
+ sh "$SOURCE_DIR/platform/deploy/check-display-owner.sh" --allow-managed ||
+   die "External display renderer appeared during build; no services changed"
+fi
 trap restore_failure ERR INT TERM
 CHANGED=1
 for unit in $(units); do systemctl stop "$unit" >/dev/null 2>&1 || :; done
