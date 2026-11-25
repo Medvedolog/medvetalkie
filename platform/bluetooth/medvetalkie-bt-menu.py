@@ -71,11 +71,11 @@ def parse_device_info(text):
     """Use BlueZ properties; RSSI may be absent or cached."""
     flags={}
     for key in ("Connected", "Paired", "Bonded", "Trusted"):
-        match=re.search(r"^\\s*"+key+r":\\s*(yes|no)\\s*$",text,re.M|re.I)
+        match=re.search(r"^\s*"+key+r":\s*(yes|no)\s*$",text,re.M|re.I)
         flags[key.lower()]=(match.group(1).lower()=="yes") if match else None
-    match=re.search(r"^\\s*RSSI:\\s*(-?\\d+)",text,re.M)
+    match=re.search(r"^\s*RSSI:\s*(-?\d+)",text,re.M)
     flags["rssi"]=int(match.group(1)) if match else None
-    match=re.search(r"^\\s*Battery Percentage:\\s*(?:0x([0-9a-fA-F]+)|([0-9]+))",text,re.M)
+    match=re.search(r"^\s*Battery Percentage:\s*(?:0x([0-9a-fA-F]+)|([0-9]+))",text,re.M)
     flags["battery"]=(int(match.group(1),16) if match.group(1)
                       else int(match.group(2))) if match else None
     return flags
@@ -233,7 +233,7 @@ class Manager:
         if code: raise RuntimeError(out)
         controllers=[]
         for line in out.splitlines():
-            m=re.search(r"Controller\\s+("+MAC_PATTERN.pattern+r")",line)
+            m=re.search(r"Controller\s+("+MAC_PATTERN.pattern+r")",line)
             if m: controllers.append(m.group(1).upper())
         selected=requested or self.controller()
         target=selected if selected in controllers else (controllers[0] if controllers else None)
