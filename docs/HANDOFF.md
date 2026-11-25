@@ -746,3 +746,12 @@ requiring the operator to race an 8-second window.
 
 **CI verification:** [GitHub Actions 45608285963](https://github.com/Medvedolog/medvetalkie/actions/runs/45608285963) completed **successfully** for the updated generated launcher and configurable status dwell: native C11 build, 10/10 CTest, Bjorni/ST7789 standalone rendering/SPI mock checks including deterministic SHA-256 launcher regeneration and CLI/environment bounds, and full installer stage/rollback simulation. This is host CI; physical 30-second dwell and full 25 FPS are not verified yet. Neither the new 30-second
 physical behavior nor the restored 25 FPS has been observed yet.
+
+
+## Bluetooth prerequisite diagnostics — 2026-11-25
+
+- Commit `81b6b659fd1960bb99d1b80b85d3f6bc486b2b12` added `platform/bluetooth/diagnose-hfp-prereqs.sh` in the existing work branch. No changes to `main`, display/SPI, systemd units, pairing, radio configuration or audio routing.
+- The read-only tool reports two USB HCI controller identities (including physical USB port), BlueZ and connected ACL devices, presence of PipeWire/Pulse/WirePlumber tools and session sockets, HFP-related cards/profiles, sinks/sources and installed Debian audio backend packages. It makes **no** audio-readiness claim.
+- The `medvetalkie-bt` executable is still only a scaffold. No active HFP lifecycle, SCO transport or duplex routing code is present, and no Orange Pi measurement was made in this iteration.
+- Next hardware action: `sudo sh platform/bluetooth/diagnose-hfp-prereqs.sh` after pulling the work branch; share its output. If the audio session belongs to a different user, set `MT_AUDIO_USER` explicitly. Inspect findings before designing the active, opt-in one-headset HFP/audio test.
+- Verification: file creation confirmed by GitHub commit; CI and board execution of this new script are **not yet verified**.
