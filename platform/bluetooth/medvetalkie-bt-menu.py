@@ -15,6 +15,7 @@ import time
 import wave
 from pathlib import Path
 from datetime import datetime
+from bluez_cli import selected as selected_bluez, BluezCommandError
 
 ROOT = Path(__file__).resolve().parent
 MAC_PATTERN = re.compile(r"(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}")
@@ -100,16 +101,19 @@ def enrich_devices(controller, discovered):
     # BlueZ 5.82 supports 'devices Paired' and 'devices Connected'.
     # Merge both sets even if discovery cache is empty.
     for filt,field in (("Paired","paired"),("Connected","connected")):
-        code,output=command(["bluetoothctl","-i",controller,"devices",filt],8)
-        if code:
-            warnings.append(filt+": "+output[:120])
+        try:
+            output=selected_bluez(controller,"devices "+filt,timeout=8)
+        except BluezCommandError as exc:
+            warnings.append(filt+": "+str(exc)[:120])
             continue
         for item in parse_devices(output):
             target=by_mac.setdefault(item["mac"],item)
             target[field]=True
     for item in list(by_mac.values())[:60]:
-        code,info=command(["bluetoothctl","-i",controller,"info",item["mac"]],6)
-        if code: continue
+        try:
+            info=selected_bluez(controller,"info "+item["mac"],timeout=7)
+        except BluezCommandError:
+            continue
         item.update({k:v for k,v in parse_device_info(info).items() if v is not None})
     result=sorted(by_mac.values(),key=lambda d:(device_group(d),d["name"].casefold()))
     return result,warnings
@@ -143,13 +147,14 @@ def audio_devices(mac):
 def interact_bluetooth(controller, verb, device, answer_fn, event_fn, seconds=60):
     """Run bluetoothctl with a real PTY: handles PIN, passkey and yes/no agent prompts."""
     master, slave = pty.openpty()
-    proc = subprocess.Popen(["bluetoothctl","-i",controller], stdin=slave,
+    proc = subprocess.Popen(["bluetoothctl"], stdin=slave,
                             stdout=slave, stderr=slave, start_new_session=True, close_fds=True)
     os.close(slave)
     buffer = ""
     deadline = time.monotonic()+seconds
     transcript = []
     try:
+        os.write(master,("select "+controller+"\n").encode())
         os.write(master,b"agent KeyboardDisplay\n")
         os.write(master,b"default-agent\n")
         os.write(master,(verb+" "+device+"\n").encode())
@@ -245,8 +250,7 @@ class Manager:
         target=selected if selected in controllers else (controllers[0] if controllers else None)
         devices=[];warnings=[]
         if target:
-            code,out=command(["bluetoothctl","-i",target,"devices"])
-            if code: raise RuntimeError(out)
+            out=selected_bluez(target,"devices")
             devices,warnings=enrich_devices(target,parse_devices(out))
         self.messages.put(("inventory",controllers,target,devices))
         if warnings:self.messages.put(("log","BlueZ: "+"; ".join(warnings)))
@@ -346,10 +350,26 @@ class Manager:
             c=self.controller()
             if not c:self.note="Нет адаптера";return
             def scan():
-                code,out=command(["bluetoothctl","-i",c,"--timeout","12","scan","bredr"],17)
+                # Use one interactive BlueZ session for selected adapter.
+                # Limit scan and stop discovery before leaving this session.
+                proc=subprocess.Popen(["bluetoothctl"], stdin=subprocess.PIPE,
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                      text=True, errors="replace")
+                try:
+                    proc.stdin.write("select "+c+"\nscan bredr\n")
+                    proc.stdin.flush()
+                    time.sleep(12)
+                    proc.stdin.write("scan off\nquit\n")
+                    proc.stdin.flush()
+                    out=proc.communicate(timeout=5)[0]
+                finally:
+                    if proc.poll() is None:
+                        proc.terminate()
+                        try:proc.wait(timeout=2)
+                        except subprocess.TimeoutExpired:proc.kill();proc.wait()
                 self.messages.put(("log",out))
                 self.refresh()
-                return "Поиск завершён; код "+str(code)
+                return "Поиск завершён"
             self.job("Сканирование",scan);return
         if not self.device():self.note="Выберите устройство";return
         if action in ("connect","disconnect","pair","trust"):
@@ -367,7 +387,7 @@ class Manager:
             self.job("Громкость",lambda:self.gain(target,10 if action.endswith("+") else -10))
         elif action=="info":
             c=self.controller(); mac=self.device()["mac"]
-            self.job("Сведения",lambda:command(["bluetoothctl","-i",c,"info",mac])[1])
+            self.job("Сведения",lambda:selected_bluez(c,"info "+mac))
             self.page="logs"
 
     def confirmed(self, action):
