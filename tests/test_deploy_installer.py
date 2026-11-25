@@ -26,6 +26,41 @@ def call(*args, succeed=True):
     return result
 
 
+def check_spi_owner_guard():
+    # Reproduce the physical bench: stale cron owns SPI while the display
+    # systemd unit is running/restarting its C compiler. Never evict it.
+    guard = REPO / "platform" / "deploy" / "check-display-owner.sh"
+    with tempfile.TemporaryDirectory(prefix="mt-spi-owner-") as temp:
+        root = Path(temp)
+        device = root / "mock-spi"
+        device.touch()
+        fakebin = root / "bin"
+        fakebin.mkdir()
+        fuser = fakebin / "fuser"
+        fuser.write_text("#!/bin/sh\\nprintf '%s\\n' \\"\\$MT_TEST_SPI_PIDS\\"\\n")
+        # Mock fuser deliberately takes its own input from the test env:
+        # the guard still reads /proc/PID/cgroup for real PID ownership.
+        fuser.write_text('#!/bin/sh\nprintf "%s\\n" "$MT_TEST_SPI_PIDS"\n')
+        fuser.chmod(0o755)
+        def check(mode, pid, expect_success):
+            env = os.environ.copy()
+            env["PATH"] = str(fakebin) + os.pathsep + env.get("PATH", "/usr/bin:/bin")
+            env["MT_TEST_SPI_PIDS"] = pid
+            proc = subprocess.run(["sh", str(guard), mode, str(device)],
+                                  env=env, capture_output=True, text=True)
+            assert (proc.returncode == 0) == expect_success, (
+                mode, pid, proc.stdout, proc.stderr)
+        check("--allow-managed", "", True)
+        check("--require-free", "", True)
+        check("--require-managed", "", False)
+        # Any external process must fail the guard, irrespective of whether
+        # some unrelated MedveTalkie systemd service is active.
+        check("--allow-managed", str(os.getpid()), False)
+        check("--require-free", str(os.getpid()), False)
+        check("--require-managed", str(os.getpid()), False)
+        check("--allow-managed", "999999999", False)
+
+
 def check_release_access(staging):
     # The real ARM64 deployment previously passed CTest but failed to start:
     # root-owned mktemp 0700 release dirs were inaccessible to User=medvetalkie.
@@ -43,6 +78,8 @@ def check_release_access(staging):
         assert mode & 0o005 == 0o005, f"{target} not executable by service user"
     assert stat.S_IMODE((release / "MANIFEST").stat().st_mode) & 0o004
     assert stat.S_IMODE((release / "medvetalkie-screensaver.sh").stat().st_mode) & 0o004
+    assert (release / "check-display-owner.sh").read_bytes() == (
+        REPO / "platform" / "deploy" / "check-display-owner.sh").read_bytes()
 
 
 def check_services(staging):
@@ -66,6 +103,9 @@ def check_services(staging):
     assert "0.0.0.0" not in web
     assert "User=root" in display
     assert "--no-sync" in display and "--status-file" in display
+    assert "ExecCondition=/bin/sh /opt/medvetalkie/current/check-display-owner.sh --require-free" in display
+    assert "StartLimitBurst=2" in display
+    assert "StartLimitIntervalSec=180" in display
     assert "sprdwl_ng" not in "\n".join((core, status, web, display))
     assert "ExecStart=" in core and "ExecStart=" in status
 
@@ -73,6 +113,11 @@ def check_services(staging):
 def main():
     syntax = subprocess.run(["bash", "-n", str(SCRIPT)], capture_output=True, text=True)
     assert syntax.returncode == 0, syntax.stderr
+    guard_syntax = subprocess.run(
+        ["sh", "-n", str(REPO / "platform" / "deploy" / "check-display-owner.sh")],
+        capture_output=True, text=True)
+    assert guard_syntax.returncode == 0, guard_syntax.stderr
+    check_spi_owner_guard()
 
     dry = call("--dry-run", "--proxy", "http://192.168.11.100:10880")
     assert "mixed HTTP proxy=http://192.168.11.100:10880" in dry.stdout
@@ -151,9 +196,9 @@ def main():
         call("--simulate", staging, succeed=False)
         assert unmanaged.read_text().startswith("[Unit]")
 
-    print("PASS deploy: mixed HTTP proxy, dry-run, invalid input, executable "
-          "non-root release permissions, systemd, second install, rollback, "
-          "unmanaged-unit protection")
+    print("PASS deploy: mixed proxy, dry-run, non-root permissions, "
+          "SPI owner guard and restart limits, systemd, second install, "
+          "rollback, unmanaged-unit protection")
 
 
 if __name__ == "__main__":
