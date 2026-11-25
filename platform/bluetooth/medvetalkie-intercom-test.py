@@ -15,13 +15,11 @@ import sys
 import time
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from bluez_cli import selected as selected_bluez, BluezCommandError
 
 MAC_RE = re.compile(r"^(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 CONTROLLER_RE = re.compile(r"^Controller\s+((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})", re.M)
 DEVICE_RE = re.compile(r"^Device\s+((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})\b", re.M)
 ID_RE = re.compile(r"^\s*(\d+)\s*$")
-STOPS = (signal.SIGINT, signal.SIGTERM)
 
 
 class BridgeError(RuntimeError):
@@ -58,24 +56,40 @@ def audio_cli(user, *args):
     return ["env", *env, *args]
 
 
-def parse_adapters(output):
-    return [m.upper() for m in CONTROLLER_RE.findall(output)]
+def controller_inventory(mac_a, mac_b, executor=run):
+    """Read BlueZ system D-Bus state; never scrape asynchronous bluetoothctl prompts.
 
-
-def parse_devices(output):
-    return set(x.upper() for x in DEVICE_RE.findall(output))
-
-
-def controller_inventory(executor=run):
-    controllers = parse_adapters(executor(["bluetoothctl", "list"]))
-    membership = {}
-    if len(controllers) < 2:
-        raise BridgeError("Two BlueZ controllers are required; found %d" % len(controllers))
-    for controller in controllers:
-        devices = parse_devices(selected_bluez(controller, "devices Connected"))
-        for device in devices:
-            membership.setdefault(device, set()).add(controller)
-    return membership
+    The BlueZ object tree is a snapshot. Device1.Connected and Adapter1.Address
+    identify the active BR/EDR link and its actual controller. No state changes.
+    """
+    tree = executor(["busctl", "--system", "tree", "org.bluez"])
+    adapter_paths = sorted(set(re.findall(r"/org/bluez/(hci[0-9]+)(?:/|\\b)", tree)))
+    device_paths = set(re.findall(
+        r"/org/bluez/hci[0-9]+/dev_(?:[0-9A-Fa-f]{2}_){5}[0-9A-Fa-f]{2}", tree))
+    if len(adapter_paths) < 2:
+        raise BridgeError("Need two BlueZ controllers; D-Bus tree has %d" % len(adapter_paths))
+    memberships = {}
+    for adapter in adapter_paths:
+        adapter_path = "/org/bluez/" + adapter
+        address = executor(["busctl", "--system", "get-property", "org.bluez",
+                            adapter_path, "org.bluez.Adapter1", "Address"])
+        match = re.fullmatch(r's\\s+"((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})"', address.strip())
+        if not match:
+            raise BridgeError("Unexpected adapter address property for %s: %s" %
+                              (adapter, address[:120]))
+        controller_mac = match.group(1).upper()
+        for device_mac in (mac_a, mac_b):
+            object_path = adapter_path + "/dev_" + device_mac.replace(":", "_")
+            if object_path not in device_paths:
+                continue
+            connected = executor(["busctl", "--system", "get-property", "org.bluez",
+                                  object_path, "org.bluez.Device1", "Connected"]).strip()
+            if connected not in ("b true", "b false"):
+                raise BridgeError("Invalid Connected property for %s: %s" %
+                                  (device_mac, connected[:120]))
+            if connected == "b true":
+                memberships.setdefault(device_mac, set()).add(controller_mac)
+    return memberships
 
 
 def assign_controllers(mac_a, mac_b, memberships):
@@ -129,7 +143,7 @@ def validate(mac_a, mac_b, user, executor=run):
     mac_a, mac_b = normalize_mac(mac_a), normalize_mac(mac_b)
     if mac_a == mac_b:
         raise BridgeError("Specify two distinct headsets")
-    locations = controller_inventory(executor)
+    locations = controller_inventory(mac_a, mac_b, executor)
     adapter_a, adapter_b = assign_controllers(mac_a, mac_b, locations)
     paths = resolve_audio(mac_a, mac_b, user, executor)
     return {"A": {**paths[mac_a], "mac": mac_a, "adapter": adapter_a},
@@ -225,7 +239,7 @@ def main():
             signal.signal(signal.SIGTERM, previous)
         print("Bridge stopped; test routes removed.")
         return 0
-    except (BridgeError, BluezCommandError, KeyError) as exc:
+    except (BridgeError, KeyError) as exc:
         print("NOT READY: "+str(exc), file=sys.stderr)
         return 2
     except KeyboardInterrupt:
