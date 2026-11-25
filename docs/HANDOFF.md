@@ -818,3 +818,12 @@ Next hardware test: confirm CVSD active profile, start a bounded mic recording p
 - Operator reported **"есть воспроизведение"** after the CVSD/record-and-playback test instructions. This is evidence that sound was heard during playback through AIRIDE N1; it is **not yet an unambiguous confirmation that the WAV actually contained voice captured from the AIRIDE microphone**.
 - Distinguish: audible playback verified by operator; recording capture and nonzero vocal PCM require explicit operator confirmation or waveform examination; simultaneous two-way audio, SCO/eSCO packet counters and long-term stability remain **NOT VERIFIED**.
 - Next: ask whether the spoken recording was heard, then inspect `btmon` synchronously during streaming and test duplex with two real headsets/controllers. Preserve pairing, display, network and existing audio session.
+
+
+## First real AIRIDE N1 HFP microphone-to-playback loop validated by operator — 2026-11-25
+
+The operator explicitly clarified that, after the CVSD switch and guided `parecord`/`paplay` workflow, they heard **their own recorded voice** in the AIRIDE N1, describing the sound as **telephone quality**. This confirms functional *sequential* headset microphone capture and headset playback through the selected HFP path on the physical Orange Pi Zero 3 / first UGREEN ATS2851 controller. Previous operator output had shown `headset-head-unit` profile and both Bluetooth PipeWire source/sink nodes; `headset-head-unit-cvsd` was subsequently selected successfully before this test, but no independent post-switch profile snapshot was submitted. Attribute the successful voice check to the CVSD test sequence, without inventing HCI trace or asserting codec negotiation beyond the selected profile.
+
+**Verified by human hearing:** microphone input and output both work in a sequential record-then-playback test. **Still unverified:** simultaneous full-duplex, HCI SCO/eSCO event/packet trace, measured latency/packet loss, confirmed mSBC voice quality and the second independent USB controller/headset. Avoid claiming a completed two-headset intercom.
+
+Next hardware plan: repeat the microphone/playback test under `headset-head-unit` mSBC; collect `btmon` during a bounded active stream; run simultaneous playback/recording on one headset; then connect a distinct second headset on the other UGREEN and implement isolated cross-routing with failure recovery. Preserve display, existing bond and network.
