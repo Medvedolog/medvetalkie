@@ -150,7 +150,12 @@ are verified on the real board.
 
 When an atomically refreshed status feed reports `mode=STANDBY` and
 `fault=NONE`, display the dashboard for 8 seconds after startup or a
-state change, then return to the animated Bjorni clock. Any active
+state change, then return to the animated Bjorni clock. The standalone CLI
+supports `--status-seconds N` (1-120, default 8) or environment variable
+`MEDVETALKIE_STATUS_SECONDS`, with CLI taking precedence. The managed
+`medvetalkie-display.service` explicitly selects **30 seconds** for easier
+physical bench inspection; it still uses the same single renderer and
+4 MHz/25 FPS animation settings. Any active
 mode, pairing, fault, absent or stale feed pins the status screen. The
 status screen refreshes at approximately 2 FPS to reduce SPI overhead;
 standby animation retains its configured 25 FPS ceiling. No other process
@@ -192,12 +197,14 @@ bash platform/display/medvetalkie-screensaver.sh --no-sync \
   --preview /tmp/medvetalkie-status.ppm
 ```
 
-**Do not enable at boot yet.** The Core API producer and this renderer
-currently reside in different development branches; no integrated
-Armbian image or physical Bjorni/status switching test has been performed.
-Use a single Core/settings/display service bundle only after synchronizing
-these branches and validating on Orange Pi Zero 3. The old no-status-file
-launch command continues to behave exactly as before.
+**Physical milestone (2026-11-25):** The operator has now observed the
+informational dashboard during startup on the real ST7789 after removing
+the legacy cron renderer; the screen was too brief to inspect at the
+original eight-second setting. Physical FPS and reboot persistence are
+not yet reconfirmed. This is **not** an interactive menu: GPIO input and
+LVGL navigation remain separate unimplemented milestones. Do not
+run the legacy cron screensaver alongside the systemd display service.
+The standalone old no-status-file launch command remains supported.
 
 ## Hardware observations, 2026-11-24
 
