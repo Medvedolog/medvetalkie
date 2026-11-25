@@ -254,3 +254,72 @@ will print service journal data **before automatic rollback**; collect
 those errors. Do not enable the SPI renderer before Core/Web/status are
 healthy. Correct the wall clock and Armbian signing key separately;
 never bypass APT signature validation.
+
+
+## 12. Third physical OPiZ3 deployment — first successful Core/Web/BT observation (2026-11-25)
+
+**Hardware evidence:** operator pasted a complete command log from the actual
+`root@orangepizero3`. After `git pull --ff-only` to `5e735b7`,
+`sudo bash platform/deploy/install-opiz3.sh --apply --skip-packages
+--proxy http://192.168.11.100:10880` **completed**:
+
+- ARM64 GCC build passed, **10/10 CTest** passed, and the standalone
+  Bjorni/ST7789 status-renderer/SPI-mock suite passed.
+- The installer printed `INSTALLED:
+  /opt/medvetalkie/releases/20261125T110330Z-5e735b7-8087`.
+  `medvetalkie-core`, `medvetalkie-status`, and `medvetalkie-web`
+  were all **enabled and active (running)**, with PIDs 9080, 9123, 9168.
+  The operator confirmed the **actual** HTTP `/api/v1/health` response
+  `{"v":1,"type":"health","service":"medvetalkied",
+  "status":"ready","core":"reachable","bluetooth":"not_implemented",
+  "audio":"not_implemented"}`. The loopback Web Alpha remains read-only.
+- Real sysfs inventory: two independent USB HCI controllers
+  `hci0` on physical port `1-1.3` and `hci1` on `1-1.4`, both
+  VID:PID `10d7:b012` (UGREEN / Actions ATS2851). This is
+  enumeration, **not** proof of audio route or independently assigned
+  roles; sysfs inventory still says `identity_verified:false` and
+  `hfp_ready:false`.
+- Real BlueZ D-Bus observation: two powered adapters;
+  `/org/bluez/hci0` at `F4:4E:FC:57:69:64`,
+  `/org/bluez/hci1` at `F4:4E:FC:2D:FD:4B`, both
+  `powered:true`, `discovering:false`. One known headset
+  `AIRIDE N1` (`41:42:63:27:E7:3A`) appears under `hci0`,
+  `paired:true` but `connected:false`; HFP audio and SCO transport
+  remain `NOT_VERIFIED` / `NOT_CHECKED`.
+- Real `/run/medvetalkie/display.status`:
+  `MTSTATUS1`, `mode=STANDBY`, both headsets `UNASSIGNED`,
+  `voice=NOT_VERIFIED`, `network=LAN`, `radio=NOT_AVAILABLE`,
+  `battery=UNKNOWN`, `fault=NONE`, `bt_usb=2`,
+  `bt_connected=0`. Note: this prototype `STANDBY` is
+  inferred UI idle for `effective_mode=UNKNOWN/desired_mode=UNSET`;
+  it is **not** authoritative voice/radio readiness.
+- The display unit was deliberately **not enabled**
+  (`display=0`), so the integrated status screen to Bjorni
+  transition is still unverified on physical ST7789.
+
+**Hardware milestone achieved:** one-stage local service deployment,
+three real systemd units, Core/Web Unix IPC, live dual UGREEN inventory,
+live BlueZ D-Bus and the status snapshot all work on OPiZ3. The
+earlier `0700` release-directory bug is resolved in this physical run.
+Do not confuse this milestone with HFP/SCO/full-duplex audio, role
+assignment, pairing/connect commands, or Android/WebUI control.
+
+**Next physical gate:** inspect `sudo fuser -v /dev/spidev1.0`,
+stop the old unmanaged Bjorni renderer **by its original method** if
+needed (do not kill arbitrary processes), then invoke the **existing
+installer** with `--apply --skip-packages --enable-display`. Confirm
+the status screen on ST7789 at startup, idle transition to Bjorni
+after eight seconds, and behavior after Core/BlueZ failure. Check
+`systemctl status medvetalkie-display` and journal; avoid changing
+Wi-Fi modules or the Armbian image. Next, test headset roles and actual
+HFP/SCO/record/playback using controlled hardware sessions.
+
+**Independent maintenance debt:** previous `timedatectl` showed an
+unsynchronized clock and an RTC in 1970, and APT reported a missing
+Armbian signing key. The successful installation did not run APT because
+`--skip-packages` was supplied. The new dated service log is not proof
+of stable NTP synchronization or repaired repository trust. Investigate
+separately without disabling APT signature verification.
+
+**Branch policy:** continue solely in `work/uwe5622-wifi-armbian`
+(PR #1 Draft); no additional branches and no change to `main`.
