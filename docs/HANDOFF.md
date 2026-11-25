@@ -997,3 +997,12 @@ A-to-B diagnostic entrypoint:
 Use `--dry-run` first for safety. `--direction b-to-a|both` supported after one-way hardware verification. New offline tests `tests/test_bt_pcm_relay.py` and CI step added; `platform/bluetooth/README.md` updated.
 
 **Hardware validation and audible speech still pending.** A successful write to `paplay` only proves accepted stdin data, not that PipeWire actually renders the packets into SCO. If persistent silence despite healthy capture/write counters, collect PipeWire graph and investigate active render/scheduling or native `pw-loopback`; do not mark real-time full-duplex as fixed. `main` untouched.
+
+
+## FIRST AUDIBLE LIVE AIRIDE -> UGREEN INTERCOM PASS — 2026-11-25
+
+Operator ran the new bounded `medvetalkie-pcm-relay.py --direction a-to-b --seconds 12 --latency-ms 80` on physical Orange Pi Zero 3. Explicit subjective report: **live speech from AIRIDE N1 microphone was heard in UGREEN Studio Pro**, telephone-like quality, **approximately 0.5 seconds end-to-end latency**. This is the **first live A->B speech success** after silence with `module-loopback` and raw `parecord | paplay` shell pipeline.
+
+Telemetry at 12 s: read/write both 30.6 KiB/s (steady state; theoretical mono 16kHz S16LE 31.25 KiB/s), cumulative received=forwarded=376320 bytes, queue dropped=0 bytes, peak -2.5 dBFS, RMS -35.2 dBFS, clipped samples=0. Bounded test also reported `startup_ms=2` (time to first attempted stdin write, **NOT** perceived end-to-end delay). `errors=['parecord EOF']` only at shutdown; likely lifecycle artifact but not yet conclusively analyzed. Signal sounded like phone quality; profile was mSBC `headset-head-unit` on both headsets in prior confirmation.
+
+**Not yet verified:** live UGREEN->AIRIDE using this new PCM engine, full simultaneous bi-directional duplex with this engine, long-run stability, measured latency/jitter, HCI SCO packet loss. Do not claim production-ready intercom. Next operator tests: `--direction b-to-a --seconds 12 --latency-ms 80` then (if success) `--direction both --seconds 20 --latency-ms 80`. Compare speech directions, overlapping speech and any drop/underrun; only then address ~500ms latency with controlled measurement and buffer reductions. Keep proven profiles, bonds, display and network untouched; `main` untouched.
