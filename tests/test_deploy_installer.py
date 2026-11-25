@@ -128,6 +128,7 @@ def check_services(staging):
     assert "0.0.0.0" not in web
     assert "User=root" in display
     assert "--no-sync" in display and "--status-file" in display
+    assert "--status-seconds 30" in display
     assert "ExecCondition=/bin/sh /opt/medvetalkie/current/check-display-owner.sh --require-free" in display
     assert "StartLimitBurst=2" in display
     assert "StartLimitIntervalSec=180" in display
