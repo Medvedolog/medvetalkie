@@ -448,3 +448,85 @@ Do not claim this functionality, LVGL readiness, writable settings,
 HFP pairing actions, or audio routing based on the current
 display-only screen. Keep a single SPI renderer owner and shared Core
 IPC before building this stage.
+
+
+## 16. Live ST7789 hardware regression — repeated GPIO contention, 2026-11-25
+
+**User's physical on-board observations:**
+- Physical ST7789 continued showing the *old* jumping Bjorni, **no new
+  dashboard for even one second**. The clock banner still displayed
+  4 MHz but the observed FPS fell to about **8–9** from previously
+  measured 24.3–25 with the old uninterrupted renderer.
+- Journal of `medvetalkie-display.service` repeatedly reported:
+  `Request PC5/DC and PC6/RESET (busy lines are not overridden):
+  Device or resource busy`. systemd was continuously restarting the
+  failed service; at one point restart counter reached **106**.
+- Snapshot at 14:27 showed `medvetalkie-display.service`
+  `Active: active (running)` during its C compilation stage
+  (`cc` and `cc1` under the unit), **not an initialized renderer**.
+  At the same time `fuser -v /dev/spidev1.0` reported
+  `root screensaver` PID **11516**, **outside** the new
+  service's displayed cgroup. This is a definite conflicting SPI
+  owner and strongly suggests an old cron/manual Bjorni survived
+  after disabling an assumed root crontab entry. Its actual parent
+  and autostart source remain unconfirmed (PID is historical).
+- `MTSTATUS1` snapshot was present and parseable with
+  `mode=STANDBY`, 2 USB BT controllers, 0 connections and
+  `fault=NONE`. Thus not seeing the dashboard is explained by the
+  GPIO startup failure, not proof of a UI formatting problem.
+- Restarts repeatedly compiled the 180KB embedded standalone C
+  screensaver and competed for CPU resources. This is a plausible
+  contributor to degraded FPS, but the precise throughput root
+  cause must be measured again with exclusive SPI/GPIO ownership.
+
+**Operator containment (not yet verified as executed):**
+`sudo systemctl stop medvetalkie-display` followed by
+`sudo systemctl disable medvetalkie-display`. These commands
+leave Core, Web, status producer and both USB BT controllers alone.
+Investigate `fuser`, `ps`, `pstree`, `systemctl status PID`
+and the crontab sources, including `/etc/crontab` and
+`/etc/cron.d`. Do not automatically kill a PID or stop
+`cron.service`; remove/disable only the confirmed old Bjorni
+supervisor, preserving backup and rollback.
+
+**Source fixes staged to the same work branch:**
+- New `platform/deploy/check-display-owner.sh` checks each SPI
+  owner via `fuser` **and** `/proc/PID/cgroup`, distinguishing
+  the authorized display unit from an external cron/manual process.
+  Three modes: `--allow-managed` (installer before build),
+  `--require-free` (after managed stop and systemd ExecCondition),
+  and `--require-managed` (post-start renderer readiness gate).
+  This does not evict any process and conservatively fails on
+  unreadable/uncertain owner information.
+- Installer refuses a competing external owner even when
+  `medvetalkie-display.service` reports `active` during
+  compilation; second SPI check runs after stopping the managed
+  unit. Both guards run without APT, without disturbing kernel
+  module or network settings. The helper is shipped inside each
+  release, and installed display service invokes it as
+  `ExecCondition`.
+- systemd has `StartLimitIntervalSec=180`,
+  `StartLimitBurst=2` and `RestartSec=15` to prevent sustained
+  compiler/restart storms. An external SPI owner causes a skipped
+  start, not repeated failed GPIO initialization.
+- Installer no longer counts `systemctl is-active` during C
+  compilation as display success: after Core/Web/MTSTATUS1 health,
+  it waits for `fuser` to identify an **actual managed renderer**
+  holding SPI. The failure rollback logs now include the display
+  unit. This gate confirms exclusive *SPI process ownership* but
+  does not yet prove pixels were rendered or validate two-way
+  audio.
+- `tests/test_deploy_installer.py` mocks a legacy `fuser`
+  owner and checks the helper rejects it; also verifies the
+  service's ExecCondition/start limits and the staged helper
+  bytes. **CI validation should be recorded after running.**
+
+**Next physical gate:** first stop/disable the new display unit to
+restore old Bjorni speed; locate the still-running legacy process
+`11516` through the actual process tree and cron source; stop its
+supervisor **only after confirming it**, and verify
+`fuser -v /dev/spidev1.0` is empty. Only after CI green, upgrade
+the same work branch with the fixed installer and
+`--apply --skip-packages --enable-display`. Capture actual LCD
+status-then-Bjorni transition and FPS, and verify no restart storm.
+No unrelated Wi-Fi, kernel, boot or `main` changes.
