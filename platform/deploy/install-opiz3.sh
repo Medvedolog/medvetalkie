@@ -218,6 +218,7 @@ for binary in medvetalkied medvetalkie-web medvetalkie-display-status medvetalki
 done
 install -m 0644 "$SOURCE_DIR/platform/display/medvetalkie-screensaver.sh" "$STAGE/medvetalkie-screensaver.sh"
 printf 'source_revision=%s\n' "$revision" >"$STAGE/MANIFEST"
+chmod 0644 "$STAGE/MANIFEST"
 # mktemp -d uses 0700. Leaving that mode in a release breaks every
 # systemd User=medvetalkie service with a 203/EXEC or access failure.
 # Only executables and release directories are public; private settings,
