@@ -195,3 +195,58 @@ first direct hardware execution evidence for the in-place installer.
    screen switching, crashes and rollback in this handoff.
 
 **CI validation of fixes:** [GitHub Actions 45599477992](https://github.com/Medvedolog/medvetalkie/actions/runs/45599477992) passed **10/10 CTest**, Bjorni/ST7789 status-screen regression suite, and staged deployment/rollback simulator with new APT-signature-warning fixtures. The `web_health` fix passes in the GitHub runner; the **second physical-board run has not yet been performed**. Do not claim successful second physical installation until user logs confirm it.
+
+## 11. Second physical OPiZ3 deployment attempt — 2026-11-25
+
+**Observed from operator's SSH log:**
+
+- `git pull --ff-only` advanced to `38a5894`.
+- `date -u` remained at **2026-11-24 18:02:23 UTC**; `timedatectl`
+  reported `System clock synchronized: no`, active NTP service, and
+  an RTC reading in **1970**. The APT clock/key issue is still unresolved.
+- Installer `--apply --skip-packages` ran fully on the physical
+  ARM64 board: **10/10 CTest passed**, Bjorni/ST7789 render, pixel/SPI,
+  time-sync mocks, supervisor and launcher regressions all passed.
+- After staging, the three systemd services were enabled/started but the
+  `http://127.0.0.1:8765/api/v1/health` endpoint failed to report
+  `core=reachable`; installer invoked the rollback handler.
+  **No systemd journal, HTTP response or exit statuses were included.**
+  Actual cause must still be verified from service logs. The new display
+  was not enabled.
+
+**Concrete code defect found by postmortem review:** The installer
+ran with `umask 077`, used `mkdir -p /opt/medvetalkie/releases` and
+`mktemp -d` for releases, and then moved the **0700 root-owned**
+directory into the active release path. The `medvetalkie-core`,
+`medvetalkie-status` and `medvetalkie-web` units run as
+`User=medvetalkie`, so they could not traverse the `/opt/medvetalkie`
+releases or execute the installed binaries. This is a sufficient
+explanation for the failed health check, although journal confirmation
+remains outstanding.
+
+**Fixes in the existing work branch:**
+
+- Only the **public program** directories (`/opt/medvetalkie`,
+  `releases`, the versioned release, `bin`) are mode `0755`;
+  executable binaries are `0755`, manifest and self-contained Bjorni
+  script are `0644`. No change to `/var/lib/medvetalkie`,
+  `/run/medvetalkie`, service credentials, or backup privacy.
+- Installer runs `runuser -u medvetalkie -- test -x` against each
+  installed Core/Web/status executable before switching the current
+  symlink to that version. Fail-closed if the service identity cannot
+  traverse the release.
+- Activation-failure diagnostics now print `systemctl status`,
+  `journalctl` and release-path permissions **before** reverting units,
+  so a future failure is actionable instead of merely saying that
+  health-check failed.
+- `tests/test_deploy_installer.py` asserts that the staged release,
+  all ancestor directories and binaries are world-searchable/executable
+  but not group/world-writable. This catches the precise bug even when
+  the simulator is invoked without root.
+
+**Next physical gate:** validate the updated commit in combined CI,
+pull it through the same mixed proxy, run `--apply --skip-packages`
+without display, then collect `systemctl status`, health/BlueZ/USB
+responses and `/run/medvetalkie/display.status`. Do not enable the SPI
+renderer before Core/Web/status are healthy. Correct the wall clock and
+Armbian signing key separately; never bypass APT signature validation.
