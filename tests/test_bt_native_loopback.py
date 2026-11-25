@@ -45,6 +45,37 @@ class NativeTests(unittest.TestCase):
         self.assertNotIn("pactl",cmd)
         self.assertNotIn("bluetoothctl",cmd)
 
+    def test_inspect_native_graph_detects_pulse_alias_mismatch(self):
+        snapshot=[
+            {"id":10,"type":"PipeWire:Interface:Node",
+             "info":{"props":{"node.name":"bluez_input.native_A","media.class":"Audio/Source"},"state":"running"}},
+            {"id":11,"type":"PipeWire:Interface:Node",
+             "info":{"props":{"node.name":"bluez_output.native_B","media.class":"Audio/Sink"},"state":"running"}}
+        ]
+        def runner(argv):
+            self.assertIn("pw-dump",argv)
+            return json.dumps(snapshot)
+        text, failures=module.inspect_live_graph(
+            "medvetalkie",[("a-to-b",PLAN["A"]["source"],PLAN["B"]["sink"])],runner)
+        self.assertEqual(failures,1)
+        self.assertIn("MISMATCH",text)
+
+    def test_inspect_native_graph_shows_real_links(self):
+        src=PLAN["A"]["source"]
+        sink=PLAN["B"]["sink"]
+        snapshot=[
+            {"id":10,"type":"PipeWire:Interface:Node",
+             "info":{"props":{"node.name":src},"state":"running"}},
+            {"id":11,"type":"PipeWire:Interface:Node",
+             "info":{"props":{"node.name":sink},"state":"running"}},
+            {"id":12,"type":"PipeWire:Interface:Link",
+             "info":{"output-node-id":10,"input-node-id":11,"state":"active"}}
+        ]
+        text,failures=module.inspect_live_graph(
+            "medvetalkie",[("a-to-b",src,sink)],lambda argv: json.dumps(snapshot))
+        self.assertEqual(failures,0)
+        self.assertIn("Graph links",text)
+
     def test_reject_bad_latency_and_unscoped_endpoints(self):
         with self.assertRaises(ValueError):
             module.native_command("medvetalkie","bluez_input.A","bluez_output.B",4,"a")
