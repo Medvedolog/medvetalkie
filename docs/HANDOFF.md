@@ -519,7 +519,7 @@ supervisor, preserving backup and rollback.
 - `tests/test_deploy_installer.py` mocks a legacy `fuser`
   owner and checks the helper rejects it; also verifies the
   service's ExecCondition/start limits and the staged helper
-  bytes. **CI validation should be recorded after running.**
+  bytes. **CI confirmed:** [combined GitHub Actions 45605325119](https://github.com/Medvedolog/medvetalkie/actions/runs/45605325119) PASSED 10/10 CTest, standalone ST7789/Bjorni suite, mocked external owner checks, and the complete installer stage/rollback simulation. This is host simulation only; the live GPIO conflict and actual panel switch still require operator-side verification.
 
 **Next physical gate:** first stop/disable the new display unit to
 restore old Bjorni speed; locate the still-running legacy process
