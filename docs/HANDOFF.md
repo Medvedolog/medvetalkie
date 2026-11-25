@@ -827,3 +827,8 @@ The operator explicitly clarified that, after the CVSD switch and guided `pareco
 **Verified by human hearing:** microphone input and output both work in a sequential record-then-playback test. **Still unverified:** simultaneous full-duplex, HCI SCO/eSCO event/packet trace, measured latency/packet loss, confirmed mSBC voice quality and the second independent USB controller/headset. Avoid claiming a completed two-headset intercom.
 
 Next hardware plan: repeat the microphone/playback test under `headset-head-unit` mSBC; collect `btmon` during a bounded active stream; run simultaneous playback/recording on one headset; then connect a distinct second headset on the other UGREEN and implement isolated cross-routing with failure recovery. Preserve display, existing bond and network.
+
+
+## AIRIDE N1 mSBC subjective comparison — 2026-11-25
+
+Operator repeated real headset microphone recording and playback after selecting `headset-head-unit` (mSBC) and reported **better voice quality than CVSD, but relatively low volume**. This is a human observation for the first UGREEN / AIRIDE N1 path, not calibrated codec/SCO/latency evidence. Next check playback sink gain and headset hardware volume first (90% target, no above-100% software boost); separately inspect microphone source gain and only raise it to 100% if lower, then re-evaluate recordings for distortion. No claim of simultaneous duplex or second headset readiness.
