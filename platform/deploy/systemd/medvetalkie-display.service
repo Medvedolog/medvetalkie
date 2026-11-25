@@ -13,7 +13,7 @@ Type=simple
 User=root
 # No automated eviction of legacy cron processes: skip when SPI is busy.
 ExecCondition=/bin/sh /opt/medvetalkie/current/check-display-owner.sh --require-free
-ExecStart=/bin/bash /opt/medvetalkie/current/medvetalkie-screensaver.sh --no-sync --spi-mhz 4 --fps 25 --status-file /run/medvetalkie/display.status
+ExecStart=/bin/bash /opt/medvetalkie/current/medvetalkie-screensaver.sh --no-sync --spi-mhz 4 --fps 25 --status-file /run/medvetalkie/display.status --status-seconds 30
 Restart=on-failure
 RestartSec=15
 TimeoutStopSec=8
