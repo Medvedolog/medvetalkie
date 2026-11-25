@@ -766,3 +766,10 @@ Operator ran `diagnose-hfp-prereqs.sh` twice on Orange Pi Zero 3, kernel `6.18.6
 - HFP/SCO/PCM and two-way voice are **NOT TESTED**. No need to change USB/BlueZ driver or touch the ST7789 on the evidence above.
 - Follow-up commit `49c91f0`: diagnostic handles missing sysfs address without treating the MAC mapping as proof; BlueZ lookup is best-effort.
 - Next action: resolve previous APT signature/time problems first, then install the four missing audio packages (plus CLI helpers as needed) from authenticated repositories; enable user-session PipeWire/WirePlumber for the dedicated medvetalkie account and re-run preflight before any active pairing. Audio stack setup and CI of the diagnostic script remain **unverified**.
+
+
+## Next image build requirement accepted — 2026-11-25
+
+User directed that the **next full Armbian image** contain the complete Bluetooth HFP audio prerequisite stack by default. TZ v1.4 §28 and `platform/armbian-image/README.md` now require PipeWire, pipewire-pulse, WirePlumber, Bluetooth SPA, diagnostic tools, an unprivileged persistent headless audio user session, reliable verified APT and separate build/boot/hardware audio gates. Both UGREEN remain USB-based; do not regress ST7789, Core, network, blacklist or rollback.
+
+**Not implemented in the image build scripts yet.** A documentation requirement is not a working build. Next engineering task: integrate the package set + user-systemd provisioning in the image recipe, add rootfs/boot smoke checks, then confirm on the physical OPiZ3. Do not claim actual HFP/SCO/full-duplex until hardware proof.
