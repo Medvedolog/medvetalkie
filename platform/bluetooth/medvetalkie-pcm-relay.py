@@ -162,7 +162,8 @@ class Stats:
 
 
 class Route:
-    def __init__(self, label, user, source, sink, latency, queue_frames=QUEUE_FRAMES, gain=1.0):
+    def __init__(self, label, user, source, sink, latency, queue_frames=QUEUE_FRAMES, gain=1.0,
+                 gate_dbfs=None, gate_floor=0.15, gate_hang_ms=300):
         self.label=label
         self.user=user
         self.source=source
@@ -173,6 +174,10 @@ class Route:
         if not math.isfinite(gain) or not 0.25 <= gain <= 1.0:
             raise ValueError('Gain must be 0.25..1.0')
         self.gain=gain
+        if not 0 <= gate_hang_ms <= 2000 or gate_hang_ms % FRAME_MS:
+            raise ValueError("Gate hang must be 20ms aligned and <=2000ms")
+        self.gate=(NoiseGate(gate_dbfs,gate_floor,gate_hang_ms//FRAME_MS)
+                   if gate_dbfs is not None else None)
         self.queue=queue.Queue(maxsize=queue_frames)
         self.stats=Stats()
         self.stop=threading.Event()
@@ -205,23 +210,33 @@ class Route:
             while not self.stop.is_set():
                 data=os.read(proc.stdout.fileno(),FRAME_BYTES*2)
                 if not data:
-                    self.stats.errors.append("parecord EOF")
+                    if not self.stop.is_set():
+                        self.stats.errors.append("parecord EOF before shutdown")
                     break
                 self.stats.capture(data,time.monotonic())
                 pending.extend(data)
                 while len(pending)>=FRAME_BYTES:
-                    frame=scale_pcm(bytes(pending[:FRAME_BYTES]), self.gain)
+                    frame=bytes(pending[:FRAME_BYTES])
+                    if self.gate is not None:
+                        frame=self.gate.process(frame)
+                        self.stats.gate_open_frames=self.gate.open_frames
+                        self.stats.gate_closed_frames=self.gate.closed_frames
+                    frame=scale_pcm(frame,self.gain)
                     del pending[:FRAME_BYTES]
                     try:
                         self.queue.put_nowait(frame)
+                        self.stats.queue_high_water=max(self.stats.queue_high_water,self.queue.qsize())
                     except queue.Full:
                         try:
                             old=self.queue.get_nowait()
                             self.stats.dropped+=len(old)
                         except queue.Empty:
                             pass
-                        try:self.queue.put_nowait(frame)
-                        except queue.Full:self.stats.dropped+=len(frame)
+                        try:
+                            self.queue.put_nowait(frame)
+                            self.stats.queue_high_water=max(self.stats.queue_high_water,self.queue.qsize())
+                        except queue.Full:
+                            self.stats.dropped+=len(frame)
         except OSError as exc:
             if not self.stop.is_set():self.stats.errors.append("read: "+str(exc))
 
