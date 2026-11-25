@@ -194,5 +194,4 @@ first direct hardware execution evidence for the in-place installer.
 4. Record actual service status, active unit logs, two UGREEN identities,
    screen switching, crashes and rollback in this handoff.
 
-**CI status at entry creation:** refreshed combined CI not yet
-confirmed. Do not claim a successful second physical install yet.
+**CI validation of fixes:** [GitHub Actions 45599477992](https://github.com/Medvedolog/medvetalkie/actions/runs/45599477992) passed **10/10 CTest**, Bjorni/ST7789 status-screen regression suite, and staged deployment/rollback simulator with new APT-signature-warning fixtures. The `web_health` fix passes in the GitHub runner; the **second physical-board run has not yet been performed**. Do not claim successful second physical installation until user logs confirm it.
