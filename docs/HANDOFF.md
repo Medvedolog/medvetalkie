@@ -132,3 +132,67 @@ The technical-spec baseline is [MedveTalkie TZ v1.4](MedveTalkie_TZ_v1.4.md), es
   integration branches. Update this handoff after first physical trial
   with actual command output, observed failures, and rollback decision.
 
+
+## 10. First real Orange Pi Zero 3 deployment attempt — 2026-11-25
+
+Operator provided a complete shell log from the physical test board
+(`root@orangepizero3`) after the initial one-shot install. This is the
+first direct hardware execution evidence for the in-place installer.
+
+**Observed:**
+
+- `git clone` through mixed HTTP proxy `192.168.11.100:10880` worked;
+  branch `work/uwe5622-wifi-armbian` was up to date; `--dry-run` passed.
+- The real `--apply` downloaded and installed 21 development packages
+  (17 MB archive total) and compiled **all** C11 binaries on ARM64,
+  using GCC 14.2, SQLite 3.46.1, D-Bus 1.16.2 and Python 3.13.5.
+- Real board CTest passed **9/10** suites; `web_health` failed because it
+  expected HTTP 503 from an unavailable BlueZ, while the **real board
+  has responding BlueZ** and returned HTTP 200. This is a test-isolation
+  bug, not evidence that the USB adapters or HFP/SCO are working.
+- Because CTest failed, the installer did **not** deploy binaries or
+  activate systemd services. There is no verified display transition yet.
+- APT `sqv` also reported several Debian `InRelease` records as
+  **Not live until 2026-11-25 07:xx UTC** (system wall clock was too
+  early for their validity interval) and a missing Armbian signing key
+  `DF00FAF1C577104B50BF1D0093D6889F9F0E78D5`. Despite this,
+  `apt-get update` continued with cached indexes and package install
+  succeeded. This is an **independent trust/clock fault**; never
+  disable signing checks or automatically import an unverified key.
+
+**Corrections committed in the existing work branch:**
+
+- `medvetalkie-web --listen-port` selects another **loopback-only**
+  HTTP port for tests; deployed systemd service continues at 8765.
+  The test uses 18765 to avoid colliding with a previously installed
+  service on repeat deployments.
+- Web regression test starts its test-only Core with an intentionally
+  inaccessible `DBUS_SYSTEM_BUS_ADDRESS`. It must observe HTTP 503
+  independently of the physical board's functioning `bluetoothd`.
+  The synthetic D-Bus parser test covers observed/successful objects.
+- Installer now fails closed on APT partial signature failures, missing
+  signing keys, stale-cache warnings and future-dated metadata, even
+  when `apt-get update` returns exit 0.
+  `platform/deploy/verify-apt-log.sh` is independently exercised against
+  warning fixtures in `tests/test_deploy_installer.py`.
+- All source changes remain in `work/uwe5622-wifi-armbian`; no new
+  branches, no changes to /boot, Ethernet or module blacklist.
+
+**Next physical procedure (only after combined CI is green):**
+
+1. Check `date -u`, `timedatectl status` and reliable time sync.
+   Verify the missing Armbian key through official signed vendor docs
+   rather than disabling APT authentication.
+2. Since the development dependencies were installed successfully on
+   this particular board, reuse them and re-run the updated installer
+   with `--apply --skip-packages` to avoid relying on currently
+   untrusted APT indexes. This does **not** fix APT itself.
+3. First run without `--enable-display`, verify Core/status/web
+   services, `/run/medvetalkie/display.status`, BlueZ snapshots and
+   actual USB adapter inventory. On successful validation, verify
+   `/dev/spidev1.0` is free before explicitly enabling ST7789.
+4. Record actual service status, active unit logs, two UGREEN identities,
+   screen switching, crashes and rollback in this handoff.
+
+**CI status at entry creation:** refreshed combined CI not yet
+confirmed. Do not claim a successful second physical install yet.
