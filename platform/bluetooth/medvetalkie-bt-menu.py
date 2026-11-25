@@ -140,7 +140,6 @@ def interact_bluetooth(controller, verb, device, answer_fn, event_fn, seconds=60
                             stdout=slave, stderr=slave, start_new_session=True, close_fds=True)
     os.close(slave)
     buffer = ""
-    sent = False
     deadline = time.monotonic()+seconds
     transcript = []
     try:
@@ -160,7 +159,7 @@ def interact_bluetooth(controller, verb, device, answer_fn, event_fn, seconds=60
             event_fn(chunk)
             lower=buffer.lower()
             # Prompt may be displayed without a trailing newline.
-            prompt = re.search(r"(?:Enter PIN code|Enter passkey|Confirm passkey|Request confirmation|Authorize service|Accept pairing|Confirm value|Passkey:|PIN code:)[^\r\n]{0,130}", buffer, re.I)
+            prompt = re.search(r"(?:Enter PIN code|Enter passkey|Confirm passkey|Request confirmation|Authorize service|Accept pairing|Confirm value)[^\\r\\n]{0,130}", buffer, re.I)
             if prompt:
                 question=prompt.group(0)
                 answer=answer_fn(question)
@@ -474,6 +473,12 @@ class Manager:
             curses.init_pair(num,color,-1)
         while True:
             self.drain()
+            # Refresh connection/bond state without losing the current selection.
+            # Never poll during pairing dialogs or running audio operations.
+            if (not self.pending and not self.running and self.page=="devices"
+                    and time.monotonic()-self.last_inventory > 15):
+                self.last_inventory=time.monotonic()
+                self.job("Обновление статусов", self.refresh)
             self.show_logs() if self.page=="logs" else self.draw()
             key=self.s.getch()
             if key==-1: time.sleep(.07);continue
