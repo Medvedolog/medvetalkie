@@ -20,3 +20,6 @@ jobs:
         run: python3 platform/display/screensaver/test-screensaver.py
       - name: In-place installer simulated filesystem and mixed-proxy validation
         run: python3 tests/test_deploy_installer.py
+
+      - name: Bluetooth SSH TUI offline tests
+        run: python3 -m py_compile platform/bluetooth/medvetalkie-bt-tui.py && python3 tests/test_bt_tui.py
