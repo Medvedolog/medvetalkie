@@ -107,7 +107,38 @@ def current_network(executor=execute):
     except (OSError,RuntimeError,subprocess.TimeoutExpired):pass
     return "NO_LINK"
 
-def snapshot(mac_a,mac_b,user="medvetalkie",executor=execute):
+# Only authoritative Core values from a distinct, fresh producer file.
+CORE_MODES=set("BOOT STARTING STANDBY UNCONFIGURED UNKNOWN INTERCOM SOLO_STEREO ANDROID_MEDIA PHONE_DIRECT ANDROID_BRIDGE_CALL PAIRING RADIO GAME DEGRADED ERROR CORE_OFFLINE".split())
+RADIO_VALUES={"NONE","NOT_AVAILABLE","READY","NOT_READY","UNKNOWN"}
+NETWORK_VALUES={"LAN","WIFI","LTE","NO_LINK","UNKNOWN"}
+FAULT_VALUES={"NONE","BT_FAILED","AUDIO_FAILED","LOW_BATTERY","CORE_OFFLINE"}
+
+def base_status(path):
+    file=Path(path)
+    try:
+        info=file.lstat()
+        if not file.is_file() or file.is_symlink() or info.st_size>1024 or info.st_size<12:
+            return None
+        if info.st_mtime>time.time()+5 or time.time()-info.st_mtime>MAX_AGE:
+            return None
+        data=file.read_text()
+    except (OSError,UnicodeError):
+        return None
+    lines=data.splitlines()
+    if not lines or lines[0]!="MTSTATUS1":return None
+    found={}
+    options={"mode":CORE_MODES,"radio":RADIO_VALUES,"network":NETWORK_VALUES,
+             "fault":FAULT_VALUES}
+    for line in lines[1:]:
+        if "=" not in line:return None
+        key,value=line.split("=",1)
+        if key in options:
+            if value not in options[key]:return None
+            found[key]=value
+    if "mode" not in found or "fault" not in found:return None
+    return found
+
+def snapshot(mac_a,mac_b,user="medvetalkie",executor=execute,base=None):
     try:tree=executor(["busctl","--system","tree","org.bluez"])
     except (OSError,RuntimeError,subprocess.TimeoutExpired):tree=""
     adapters=sorted(set(re.findall(r"/org/bluez/(hci\d+)(?:\b|/)",tree)))
@@ -141,7 +172,7 @@ def snapshot(mac_a,mac_b,user="medvetalkie",executor=execute):
     voice="NOT_VERIFIED"
     net=current_network(executor)
     count=sum(int(s["connected"]) for s in result)
-    return dict(mode="UNKNOWN",headset1=a["state"],headset2=b["state"],voice=voice,
+    state=dict(mode="UNKNOWN",headset1=a["state"],headset2=b["state"],voice=voice,
                 network=net,radio="NOT_AVAILABLE",battery="UNKNOWN",
                 fault="NONE" if adapters else "BT_FAILED",
                 bt_usb=min(32,len(adapters)),bt_connected=count,
@@ -149,6 +180,14 @@ def snapshot(mac_a,mac_b,user="medvetalkie",executor=execute):
                 h1_rssi=a["rssi"],h2_rssi=b["rssi"],
                 h1_volume=a["volume"],h2_volume=b["volume"],
                 h1_profile=a["profile"],h2_profile=b["profile"])
+    if base is not None:
+        authoritative=base_status(base)
+        if authoritative is None:
+            state["mode"]="CORE_OFFLINE"
+            state["fault"]="CORE_OFFLINE"
+        else:
+            state.update(authoritative)
+    return state
 
 def encode(data):
     rows=["MTSTATUS1"]
@@ -183,13 +222,17 @@ def main():
     p.add_argument("--user",default="medvetalkie")
     p.add_argument("--output",required=True)
     p.add_argument("--interval",type=int,default=2)
+    p.add_argument("--base-status-file",help="read separate legacy Core status snapshot")
     p.add_argument("--once",action="store_true")
     args=p.parse_args()
     if not MAC_RE.fullmatch(args.a) or not MAC_RE.fullmatch(args.b) or args.a==args.b:
         p.error("Two distinct valid headset MACs required")
     if not 1<=args.interval<=9:p.error("interval must be 1..9")
+    if args.base_status_file and (not Path(args.base_status_file).is_absolute()
+        or Path(args.base_status_file)==Path(args.output)):
+        p.error("base file must be absolute and distinct from --output")
     while True:
-        publish(args.output,snapshot(args.a.upper(),args.b.upper(),args.user))
+        publish(args.output,snapshot(args.a.upper(),args.b.upper(),args.user,base=args.base_status_file))
         if args.once:break
         time.sleep(args.interval)
 
