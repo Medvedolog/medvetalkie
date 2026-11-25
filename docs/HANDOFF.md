@@ -870,3 +870,15 @@ User reports Bluetooth TUI still displays nothing on physical Orange Pi; **do no
 - `tests/test_bt_intercom.py` verifies unique controller assignments, rejection of A2DP/disconnected/same-controller paths, cross-routing, unload order and rollback after partial load failure; linked to `.github/workflows/build.yml`.
 - `platform/bluetooth/README.md` adds SSH usage instructions. A second actual headset MAC has not yet been supplied, so **do not claim live dual-HFP intercom success**. First real test should begin with `--dry-run`, then an explicit bounded 30-second run and human hearing/latency feedback. Running test and CI checks must not be conflated.
 - CI workflow was launched but completion of new script's test step not confirmed at time of documentation. Container cannot resolve public GitHub raw host to execute independent local tests, so GitHub Actions is the available validation path.
+
+
+## BlueZ 5.82 CLI incompatibility discovered and fixed — 2026-11-25
+
+Physical Orange Pi user ran `bluetoothctl -i <controller> devices Connected` and BlueZ 5.82 responded `invalid option -- 'i'`. The error originates in our scripts/documentation, not the USB controller or BlueZ installation. This invalid option also explains why controller-scoped device enumeration in the TUI would fail, although TUI display functionality is independently unverified.
+
+Fixes to `work/uwe5622-wifi-armbian`:
+- `platform/bluetooth/bluez_cli.py`: read-only per-controller queries run `select <MAC>` followed by `devices [Connected/Paired/Bonded/Trusted]` or `info <MAC>` in **the same bluetoothctl session**. Input is validated. If controller selection cannot be verified, refuse to attribute results to that controller.
+- `platform/bluetooth/medvetalkie-intercom-test.py`: headless two-adapter inventory now uses that helper instead of nonexistent `bluetoothctl -i`. `medvetalkie-bt-menu.py` also uses the helper for inventory and device info and selects controller inside interactive PTY for pairing. Legacy TUI compatibility path has unsupported option removed (though it is not the supported UI).
+- `tests/test_bluez_cli.py`, `tests/test_bt_intercom.py`, `tests/test_bt_menu.py`, `tests/test_bt_tui.py` and CI updated. Docs corrected to use interactive `bluetoothctl`, then `select F4:4E:FC:57:69:64`, `devices Connected`, `select F4:4E:FC:2D:FD:4B`, `devices Connected`.
+- CI succeeded for updated code/test commit `6e3b0afe` (one workflow run); no Orange Pi hardware retest after new checkout yet. `main` not touched.
+- Next: user pulls work branch and lists real devices via interactive bluetoothctl; then validate dry-run. Do not start live cross-routing without second headset actually connected to second USB adapter.
