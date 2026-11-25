@@ -67,6 +67,47 @@ def parse_devices(text):
     return [{"mac":mac,"name":name} for mac,name in sorted(found.items(), key=lambda x:x[1].lower())]
 
 
+def parse_device_info(text):
+    """Use BlueZ properties; RSSI may be absent or cached."""
+    flags={}
+    for key in ("Connected", "Paired", "Bonded", "Trusted"):
+        match=re.search(r"^\\s*"+key+r":\\s*(yes|no)\\s*$",text,re.M|re.I)
+        flags[key.lower()]=(match.group(1).lower()=="yes") if match else None
+    match=re.search(r"^\\s*RSSI:\\s*(-?\\d+)",text,re.M)
+    flags["rssi"]=int(match.group(1)) if match else None
+    match=re.search(r"^\\s*Battery Percentage:\\s*(?:0x([0-9a-fA-F]+)|([0-9]+))",text,re.M)
+    flags["battery"]=(int(match.group(1),16) if match.group(1)
+                      else int(match.group(2))) if match else None
+    return flags
+
+
+def device_group(device):
+    if device.get("connected"): return 0
+    if device.get("paired") or device.get("bonded"): return 1
+    return 2
+
+
+def enrich_devices(controller, discovered):
+    by_mac={item["mac"]: dict(item) for item in discovered}
+    warnings=[]
+    # BlueZ 5.82 supports 'devices Paired' and 'devices Connected'.
+    # Merge both sets even if discovery cache is empty.
+    for filt,field in (("Paired","paired"),("Connected","connected")):
+        code,output=command(["bluetoothctl","-i",controller,"devices",filt],8)
+        if code:
+            warnings.append(filt+": "+output[:120])
+            continue
+        for item in parse_devices(output):
+            target=by_mac.setdefault(item["mac"],item)
+            target[field]=True
+    for item in list(by_mac.values())[:60]:
+        code,info=command(["bluetoothctl","-i",controller,"info",item["mac"]],6)
+        if code: continue
+        item.update({k:v for k,v in parse_device_info(info).items() if v is not None})
+    result=sorted(by_mac.values(),key=lambda d:(device_group(d),d["name"].casefold()))
+    return result,warnings
+
+
 def percent(text):
     match = re.search(r"\b(\d+)\s*%", text)
     return int(match.group(1)) if match else None
@@ -167,6 +208,7 @@ class Manager:
         self.last_wav={}
         self.status={}
         self._thread=None
+        self.last_inventory=0
         self.job("Обновление",self.refresh)
 
     def job(self, name, fn):
@@ -186,22 +228,23 @@ class Manager:
                         for line in str(text).splitlines() if line.strip())
         self.log=self.log[-250:]
 
-    def refresh(self):
+    def refresh(self, requested=None):
         code,out=command(["bluetoothctl","list"])
         if code: raise RuntimeError(out)
         controllers=[]
         for line in out.splitlines():
-            m=re.search(r"Controller\s+("+MAC_PATTERN.pattern+r")",line)
+            m=re.search(r"Controller\\s+("+MAC_PATTERN.pattern+r")",line)
             if m: controllers.append(m.group(1).upper())
-        selected=self.controller()
+        selected=requested or self.controller()
         target=selected if selected in controllers else (controllers[0] if controllers else None)
-        devices=[]
+        devices=[];warnings=[]
         if target:
             code,out=command(["bluetoothctl","-i",target,"devices"])
             if code: raise RuntimeError(out)
-            devices=parse_devices(out)
+            devices,warnings=enrich_devices(target,parse_devices(out))
         self.messages.put(("inventory",controllers,target,devices))
-        return "Обнаружено контроллеров: %d; устройств: %d"%(len(controllers),len(devices))
+        if warnings:self.messages.put(("log","BlueZ: "+"; ".join(warnings)))
+        return "Подключено: %d; сопряжено: %d; всего: %d"%(sum(d.get("connected",False) for d in devices),sum(bool(d.get("paired") or d.get("bonded")) for d in devices),len(devices))
 
     def controller(self):
         return self.controllers[self.adapter] if self.adapter<len(self.controllers) else None
@@ -337,6 +380,7 @@ class Manager:
                 self.adapter=controllers.index(target) if target in controllers else 0
                 old_mac=current["mac"] if current else None
                 self.devices=devices
+                self.last_inventory=time.monotonic()
                 self.device_index=next((i for i,d in enumerate(devices) if d["mac"]==old_mac),0)
             elif data[0]=="done":
                 _,label,result,error=data
@@ -380,13 +424,16 @@ class Manager:
         self.put(0,2,"MEDVETALKIE  /  BLUETOOTH MANAGER",curses.color_pair(4)|curses.A_BOLD)
         self.put(1,2,"Контроллер: "+str(self.controller() or "нет")+"   [PgUp / PgDn для смены]",curses.color_pair(4))
         self.put(2,2,"Tab: панель  ↑↓: выбор  Enter: действие  Esc: назад  Q: выход",curses.A_DIM)
-        self.put(4,2,"УСТРОЙСТВА",curses.A_BOLD)
+        self.put(4,2,"УСТРОЙСТВА · активные / сопряжённые / рядом",curses.A_BOLD)
         self.put(4,37,"ДЕЙСТВИЯ",curses.A_BOLD)
         height=h-12
         first=max(0,self.device_index-height+1)
         for i,d in enumerate(self.devices[first:first+height],first):
-            text="%s %-17s"%(d["name"][:13],d["mac"])
-            attr=curses.A_REVERSE if self.focus==0 and i==self.device_index else 0
+            icon="●" if d.get("connected") else ("◇" if device_group(d)==1 else "·")
+            rssi=("%d dBm"%d["rssi"]) if d.get("rssi") is not None else "RSSI —"
+            text="%s %s %s"%(icon,d["name"][:14],rssi)
+            attr=curses.A_REVERSE if self.focus==0 and i==self.device_index else (
+                 curses.color_pair(2) if d.get("connected") else 0)
             self.put(5+i-first,2,text[:33],attr)
         if not self.devices:self.put(5,2,"Не найдены. Выберите Поиск.",curses.color_pair(3))
         start=max(0,self.menu_index-height+1)
@@ -394,7 +441,13 @@ class Manager:
             attr=curses.A_REVERSE if self.focus==1 and i==self.menu_index else 0
             self.put(5+i-start,37,label[:w-40],attr)
         device=self.device()
-        self.put(h-7,2,"ВЫБРАНО: "+(device["name"]+" "+device["mac"] if device else "нет"),curses.color_pair(2))
+        self.put(h-8,2,"● связь  ◇ сохранено  · обнаружено   RSSI = доступные данные BlueZ",curses.A_DIM)
+        state=("  Связь:%s  Pair:%s  Trust:%s  Battery:%s"%(
+            "ДА" if device.get("connected") else "нет",
+            "ДА" if device.get("paired") else "нет",
+            "ДА" if device.get("trusted") else "нет",
+            str(device.get("battery"))+"%" if device.get("battery") is not None else "—")) if device else ""
+        self.put(h-7,2,"ВЫБРАНО: "+(device["name"]+" "+device["mac"]+state if device else "нет"),curses.color_pair(2))
         if self.running:
             self.put(h-6,2,"◐ "+self.running+" %.1f с"%(time.monotonic()-self.started),curses.color_pair(3))
         if self.pending:
@@ -445,11 +498,15 @@ class Manager:
             if key in (9,curses.KEY_BTAB,curses.KEY_LEFT,curses.KEY_RIGHT):
                 self.focus=1-self.focus
             elif key in (curses.KEY_PPAGE,ord("[")):
-                self.adapter=max(0,self.adapter-1)
-                self.devices=[];self.device_index=0;self.job("Обновление",self.refresh)
+                index=max(0,self.adapter-1)
+                target=self.controllers[index] if self.controllers else None
+                self.devices=[];self.device_index=0
+                self.job("Обновление",lambda:self.refresh(target))
             elif key in (curses.KEY_NPAGE,ord("]")):
-                self.adapter=min(max(0,len(self.controllers)-1),self.adapter+1)
-                self.devices=[];self.device_index=0;self.job("Обновление",self.refresh)
+                index=min(max(0,len(self.controllers)-1),self.adapter+1)
+                target=self.controllers[index] if self.controllers else None
+                self.devices=[];self.device_index=0
+                self.job("Обновление",lambda:self.refresh(target))
             elif key in (curses.KEY_UP,ord("k")):
                 if self.focus==0:self.device_index=max(0,self.device_index-1)
                 else:self.menu_index=max(0,self.menu_index-1)
