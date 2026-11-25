@@ -329,18 +329,7 @@ for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
 done
 if ((health==0)); then echo "Core/Web health check failed" >&2; false; fi
 if [[ ! -f /run/medvetalkie/display.status ]]; then echo "No status snapshot" >&2; false; fi
-grep -q '^MTSTATUS1
-if [[ -n "$OLD_RELEASE" && -d "$OLD_RELEASE" ]]; then
- ln -sfn "$OLD_RELEASE" "$PREFIX/previous"
-fi
-CHANGED=0
-trap - ERR INT TERM
-log "INSTALLED: $release"
-log "Web Alpha: http://127.0.0.1:8765/ (local only)"
-log "Units: medvetalkie-core/status/web; display=$DISPLAY"
-log "Previous release: $OLD_RELEASE; backed-up units: $backup"
-log "Existing boot/kernel/WLAN blacklist and network configuration are unchanged"
- /run/medvetalkie/display.status
+grep -q '^MTSTATUS1$' /run/medvetalkie/display.status
 if ((DISPLAY)); then
  # systemctl is-active is insufficient: Type=simple reports active while
  # the launcher compiles its C source, and then may fail on busy GPIO.
