@@ -744,6 +744,5 @@ requiring the operator to race an 8-second window.
    buttons, true LVGL menu and Android settings UI remain separate
    planned functionality, **not** claimed done.
 
-**CI verification:** in progress for this revision; record actual
-result after GitHub Actions completes. Neither the new 30-second
+**CI verification:** [GitHub Actions 45608285963](https://github.com/Medvedolog/medvetalkie/actions/runs/45608285963) completed **successfully** for the updated generated launcher and configurable status dwell: native C11 build, 10/10 CTest, Bjorni/ST7789 standalone rendering/SPI mock checks including deterministic SHA-256 launcher regeneration and CLI/environment bounds, and full installer stage/rollback simulation. This is host CI; physical 30-second dwell and full 25 FPS are not verified yet. Neither the new 30-second
 physical behavior nor the restored 25 FPS has been observed yet.
