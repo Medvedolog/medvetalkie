@@ -685,3 +685,65 @@ with the planned interactive GPIO/LVGL settings menu.
 The legacy cron removal, reboot persistence, SPI ownership, FPS
 recovery and HFP/SCO hardware proof should be confirmed separately
 before claiming the complete display/audio system is finished.
+
+
+## 20. Next iteration: configurable standby dashboard dwell — 2026-11-25
+
+After first seeing the real Russian status table on ST7789, operator said
+the original **8-second** display interval was too brief to inspect and
+asked "Что дальше" ("what next?"). The highest-value immediate UI change
+is to make the startup/dashboard dwell configurable rather than
+requiring the operator to race an 8-second window.
+
+**Implemented in existing branch, no new branches:**
+
+- `platform/display/screensaver/screensaver.c`: new bounded
+  `--status-seconds N` parameter (integer **1–120**), with matching
+  `MEDVETALKIE_STATUS_SECONDS` environment override. CLI wins over
+  environment when both are present, except invalid environment values
+  still fail validation early. Standalone default remains **8 s** for
+  backward compatibility; actual standby dashboard duration uses the
+  validated value. Error, offline and active-mode status screens
+  continue to persist rather than falling back to animation.
+- `platform/deploy/systemd/medvetalkie-display.service`: explicitly
+  requests **`--status-seconds 30`** at the previously observed
+  4 MHz / 25 FPS settings. One renderer still exclusively owns SPI1,
+  PC5/DC and PC6/RESET; no extra display process or library added.
+- `platform/display/screensaver/launcher.sh.in` and generated
+  self-contained `platform/display/medvetalkie-screensaver.sh` are
+  regenerated together with the embedded C SHA-256, preserving the
+  existing no-download installation flow.
+- `platform/display/screensaver/test-screensaver.py`: tests the
+  1/30/120-second valid boundaries and invalid 0/121/noninteger
+  inputs, plus environment validation; existing PPM renderer, SPI
+  frame integrity, supervisor, and deterministic launcher
+  regeneration tests remain in place.
+- `tests/test_deploy_installer.py`: asserts managed systemd
+  unit sets 30-second dashboard visibility.
+- `platform/display/README.md` updated to describe current physical
+  observation and 30s managed / 8s standalone behavior, replacing
+  outdated "not yet integrated / do not enable" instructions.
+
+**Hardware acceptance gates before broader feature development:**
+1. On the actual board confirm legacy `/etc/cron.d` Bjorni jobs
+   are archived, and `fuser -v /dev/spidev1.0` lists only the
+   authorized managed renderer, including after reboot.
+2. Pull this branch and redeploy via `sudo bash
+   platform/deploy/install-opiz3.sh --apply --skip-packages
+   --proxy http://192.168.11.100:10880 --enable-display` only
+   with the SPI checks satisfied. Observe **30 seconds**
+   of dashboard, then Bjorni; confirm readability and current
+   status, and measure live FPS, rather than treating a CTest pass
+   as an on-device measurement.
+3. Confirm Core/status/Web health, two UGREEN BlueZ controllers,
+   no GPIO contention/restart storms and stable operation after
+   a clean reboot.
+4. Next engineering milestone is actual paired headset connection
+   and HFP/SCO microphone+playback verification using the existing
+   shared Core API and state machine. Interactive GPIO joystick,
+   buttons, true LVGL menu and Android settings UI remain separate
+   planned functionality, **not** claimed done.
+
+**CI verification:** in progress for this revision; record actual
+result after GitHub Actions completes. Neither the new 30-second
+physical behavior nor the restored 25 FPS has been observed yet.
