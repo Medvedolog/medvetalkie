@@ -583,3 +583,70 @@ Russian status screen for the first ~8 s and Bjorni thereafter,
 measure FPS without conflicting compiler load, and capture
 `medvetalkie-display.service` logs. No result of this retry
 has been supplied yet. HFP/SCO remains unverified.
+
+
+## 18. Second guarded display installation blocked by cron respawn — 2026-11-25
+
+**Actual physical SSH log from operator:**
+
+- Legacy cron watchdog group was confirmed immediately before termination:
+  `PGID=11342`, `flock 11343`, shell 11344, script
+  `/root/medvetalkie-screensaver.sh` 11345, ST7789
+  renderer 11516. Operator ran
+  `sudo kill -TERM -- -11342` and `sleep 3`.
+  Immediately afterward `sudo fuser -v /dev/spidev1.0`
+  printed **nothing**, confirming successful *temporary* SPI release.
+- In the pasted sequence, operator **did not run the suggested**
+  `sudo mv /etc/cron.d/medvetalkie-screensaver
+  /root/medvetalkie-screensaver.cron.backup` before redeployment.
+  Therefore the discovered `@reboot` and **every-minute** cron.d
+  entries remained the likely re-launch source.
+- Operator pulled branch `daf4364..a266dc7`; native ARM64 GCC
+  build, **10/10 CTest**, Bjorni/ST7789 render and SPI host mocks
+  all passed.
+- During subsequent deployment, an **entirely new** legacy
+  `root screensaver` PID **26329** reappeared and took
+  `/dev/spidev1.0`. The new installer's post-stop ownership
+  guard correctly rejected it:
+  `SPI /dev/spidev1.0 is held by PID 26329`;
+  `SPI not released after stopping managed display; rolling back`.
+- This occurred **after** the installer had already stopped
+  Core/status/Web (their systemd records show clean exits at
+  14:39:17 MSK). Installer invoked rollback and restored service
+  definitions. The provided log **does not show** subsequent
+  `systemctl is-active` or HTTP health checks, so explicitly verify
+  they recovered. `medvetalkie-display` remained disabled.
+  A check after the failure still found PID 26329 holding SPI.
+- The archived `journalctl` displayed 42+ old restart-storm events
+  from the *previous* renderer attempts, not new errors caused by
+  the current guarded retry. Do not interpret retained historical
+  journal lines as evidence the updated unit is restarting.
+
+**Follow-up code correction in the same branch:**
+
+- Added `platform/deploy/check-legacy-display-cron.sh`:
+  fail-closed when `/etc/cron.d/medvetalkie-screensaver`
+  contains an active noncommented entry launching
+  `/root/medvetalkie-screensaver.sh`. Does **not** disable cron
+  or kill a process. This prevents a known minute-watchdog
+  from respawning during a long CMake/CTest step.
+- Installer now checks both legacy cron.d and SPI ownership
+  **before the build** and repeats both checks **before stopping
+  any live systemd service**. Its existing post-stop guard remains
+  for last-moment races, with rollback. This avoids needless
+  Core/status/Web downtime for known external interference.
+- New simulated fixture tests `@reboot`, minute watchdog,
+  commented/disabled cron entries and absent cron file.
+- The fix is **not yet physically installed or verified**;
+  green CI and board retry status must be recorded separately.
+
+**Next physical steps:** archive the actual file from
+`/etc/cron.d` to `/root`, stop only the confirmed
+currently-running legacy process group, verify
+`fuser -v /dev/spidev1.0` remains empty **after a full
+minute** and `systemctl is-active medvetalkie-core
+medvetalkie-status medvetalkie-web` reports active. Then
+pull the new branch and use `--apply --skip-packages
+--enable-display`, inspect a real dashboard within
+the first ~8 seconds, Bjorni thereafter, and FPS.
+Do not merge `main` or claim HFP/SCO working.
