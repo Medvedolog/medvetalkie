@@ -6,6 +6,7 @@ The simulator compiles the actual code and runs the complete Core/ST7789 suite.
 """
 from pathlib import Path
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -23,6 +24,25 @@ def call(*args, succeed=True):
     else:
         assert result.returncode != 0, (args, result.stdout[-1000:])
     return result
+
+
+def check_release_access(staging):
+    # The real ARM64 deployment previously passed CTest but failed to start:
+    # root-owned mktemp 0700 release dirs were inaccessible to User=medvetalkie.
+    prefix = staging / "opt" / "medvetalkie"
+    release = (prefix / "current").resolve(strict=True)
+    for directory in (prefix, prefix / "releases", release, release / "bin"):
+        mode = stat.S_IMODE(directory.stat().st_mode)
+        assert mode & 0o005 == 0o005, (
+            f"{directory} not traversable by a non-root systemd service: {mode:04o}"
+        )
+        assert not (mode & 0o022), f"release directory writable by others: {directory}"
+    for binary in ("medvetalkied", "medvetalkie-web", "medvetalkie-display-status"):
+        target = release / "bin" / binary
+        mode = stat.S_IMODE(target.stat().st_mode)
+        assert mode & 0o005 == 0o005, f"{target} not executable by service user"
+    assert stat.S_IMODE((release / "MANIFEST").stat().st_mode) & 0o004
+    assert stat.S_IMODE((release / "medvetalkie-screensaver.sh").stat().st_mode) & 0o004
 
 
 def check_services(staging):
@@ -107,6 +127,7 @@ def main():
         assert (original / "medvetalkie-screensaver.sh").read_bytes() == (
             REPO / "platform" / "display" / "medvetalkie-screensaver.sh").read_bytes()
         check_services(staging)
+        check_release_access(staging)
         assert not (prefix / "previous").exists()
 
         second = call("--simulate", staging, "--enable-display", "--no-proxy")
@@ -116,11 +137,13 @@ def main():
         previous = prefix / "previous"
         assert previous.is_symlink() and previous.resolve(strict=True) == original
         check_services(staging)
+        check_release_access(staging)
 
         restored = call("--rollback", "--simulate", staging)
         assert "Rolled back to" in restored.stdout
         assert current.resolve(strict=True) == original
         assert previous.resolve(strict=True) == updated
+        check_release_access(staging)
 
         # Do not overwrite an administrator-owned unit, even in simulator.
         unmanaged = staging / "etc" / "systemd" / "system" / "medvetalkie-web.service"
@@ -128,8 +151,9 @@ def main():
         call("--simulate", staging, succeed=False)
         assert unmanaged.read_text().startswith("[Unit]")
 
-    print("PASS deploy: mixed HTTP proxy, dry-run, invalid input, staged binaries, "
-          "systemd permissions, second install, rollback, unmanaged-unit protection")
+    print("PASS deploy: mixed HTTP proxy, dry-run, invalid input, executable "
+          "non-root release permissions, systemd, second install, rollback, "
+          "unmanaged-unit protection")
 
 
 if __name__ == "__main__":
