@@ -53,6 +53,11 @@ for node in /sys/class/bluetooth/hci*; do
             vid=$(cat "$parent/idVendor" 2>/dev/null || :)
             pid=$(cat "$parent/idProduct" 2>/dev/null || :)
             addr=$(cat "$node/address" 2>/dev/null || :)
+            # BlueZ may expose an address via Adapter1 when kernel sysfs does not.
+            if [ -z "$addr" ] && command -v bluetoothctl >/dev/null 2>&1; then
+                addr=$(bluetoothctl show "$hci" 2>/dev/null | sed -n 's/^[[:space:]]*Controller \([[:xdigit:]:]*\).*/\1/p' | head -n 1)
+            fi
+            [ -n "$addr" ] || addr=unavailable
             printf '%s address=%s vid:pid=%s:%s usb_path=%s\n' "$hci" "$addr" "$vid" "$pid" "${parent##*/}"
             usb_count=$((usb_count + 1))
             break
