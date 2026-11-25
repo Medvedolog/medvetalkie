@@ -32,3 +32,6 @@ jobs:
 
       - name: Measured Bluetooth PCM relay offline tests
         run: python3 -m py_compile platform/bluetooth/medvetalkie-pcm-relay.py && python3 tests/test_bt_pcm_relay.py
+
+      - name: Native PipeWire loopback scope and CLI tests
+        run: python3 -m py_compile platform/bluetooth/medvetalkie-native-loopback.py && python3 tests/test_bt_native_loopback.py
