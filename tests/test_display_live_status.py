@@ -23,9 +23,9 @@ class LiveStatusTests(unittest.TestCase):
         from unittest.mock import patch
         def fake(argv,timeout=5):
             if argv[:3]==["busctl","--system","tree"]:
-                return ("/org/bluez/hci0\\n/org/bluez/hci1\\n"+
-                        "/org/bluez/hci0/dev_"+A.replace(":","_")+"\\n"+
-                        "/org/bluez/hci1/dev_"+B.replace(":","_")+"\\n")
+                return ("/org/bluez/hci0\n/org/bluez/hci1\n"+
+                        "/org/bluez/hci0/dev_"+A.replace(":","_")+"\n"+
+                        "/org/bluez/hci1/dev_"+B.replace(":","_")+"\n")
             if argv[:3]==["busctl","--system","get-property"]:
                 prop=argv[-1]
                 if prop in ("Paired","Connected"):return "b true"
@@ -35,16 +35,16 @@ class LiveStatusTests(unittest.TestCase):
             if "pactl" in argv:
                 cmd=argv[argv.index("pactl")+1:]
                 if cmd==["list","cards"]:
-                    return ("Card #11\\nName: bluez_card."+A.replace(":","_")+
-                            "\\nActive Profile: headset-head-unit\\n"+
-                            "Card #12\\nName: bluez_card."+B.replace(":","_")+
-                            "\\nActive Profile: headset-head-unit\\n")
+                    return ("Card #11\nName: bluez_card."+A.replace(":","_")+
+                            "\nActive Profile: headset-head-unit\n"+
+                            "Card #12\nName: bluez_card."+B.replace(":","_")+
+                            "\nActive Profile: headset-head-unit\n")
                 if cmd==["list","short","sinks"]:
-                    return ("11 bluez_output."+A.replace(":","_")+".1 PipeWire\\n"+
-                            "12 bluez_output."+B.replace(":","_")+".1 PipeWire\\n")
+                    return ("11 bluez_output."+A.replace(":","_")+".1 PipeWire\n"+
+                            "12 bluez_output."+B.replace(":","_")+".1 PipeWire\n")
                 if cmd==["list","short","sources"]:
-                    return ("22 bluez_input."+A+" PipeWire\\n"+
-                            "23 bluez_input."+B+" PipeWire\\n")
+                    return ("22 bluez_input."+A+" PipeWire\n"+
+                            "23 bluez_input."+B+" PipeWire\n")
                 if cmd[0]=="get-sink-volume":return "Volume: mono: 65536 / 100% / 0.00 dB"
             if argv[:3]==["ip","-br","-4"]:return "end0 UP 192.168.11.1/24"
             raise AssertionError("Unexpected request: "+repr(argv))
