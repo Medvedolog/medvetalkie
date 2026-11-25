@@ -31,6 +31,24 @@ class LiveStatusTests(unittest.TestCase):
         self.assertEqual(state["fault"],"BT_FAILED")
         self.assertEqual(state["h1_battery"],-1)
 
+    def test_core_mode_and_fault_use_fresh_separate_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            name=Path(tmp)/"core.status"
+            name.write_text("MTSTATUS1\nmode=INTERCOM\nfault=NONE\nnetwork=LAN\nradio=NOT_AVAILABLE\n")
+            value=mod.base_status(str(name))
+            self.assertEqual(value["mode"],"INTERCOM")
+            self.assertEqual(value["fault"],"NONE")
+            name.write_text("MTSTATUS1\nmode=NOT_A_REAL_MODE\nfault=NONE\n")
+            self.assertIsNone(mod.base_status(str(name)))
+
+    def test_stale_core_rejected(self):
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            name=Path(tmp)/"core.status"
+            name.write_text("MTSTATUS1\nmode=INTERCOM\nfault=NONE\n")
+            os.utime(name,(1,1))
+            self.assertIsNone(mod.base_status(str(name)))
+
     def test_injection_rejected(self):
         with self.assertRaises(ValueError):mod.encode({"state":"READY\nfoo=BAD"})
         with self.assertRaises(ValueError):mod.encode({"foo\nbar":"READY"})
