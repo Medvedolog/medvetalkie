@@ -153,12 +153,14 @@ def snapshot(mac_a,mac_b,user="medvetalkie",executor=execute,base=None):
             if "/org/bluez/"+adapter+"/dev_"+mac.replace(":","_") in tree:
                 device_adapters[mac]=adapter
                 break
-    try:
-        cards=executor(audio(user,"pactl","list","cards"))
-        sinks=executor(audio(user,"pactl","list","short","sinks"))
-        sources=executor(audio(user,"pactl","list","short","sources"))
-    except (OSError,RuntimeError,PermissionError,subprocess.TimeoutExpired):
-        cards=sinks=sources=""
+    cards=sinks=sources=""
+    if adapters:
+        try:
+            cards=executor(audio(user,"pactl","list","cards"))
+            sinks=executor(audio(user,"pactl","list","short","sinks"))
+            sources=executor(audio(user,"pactl","list","short","sources"))
+        except (OSError,RuntimeError,PermissionError,KeyError,subprocess.TimeoutExpired):
+            cards=sinks=sources=""
     result=[]
     for mac in (mac_a,mac_b):
         adapter=device_adapters.get(mac)
