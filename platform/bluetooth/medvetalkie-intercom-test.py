@@ -194,25 +194,53 @@ def audio_snapshot(user, executor=run):
     return "\n".join(result)
 
 
-def bridge(plan, user, seconds, latency, executor=run, sleep=time.sleep, diagnose=False):
+def route_pairs(plan, direction):
+    if direction not in ("both", "a-to-b", "b-to-a"):
+        raise BridgeError("Unknown direction: "+direction)
+    a, b = plan["A"], plan["B"]
+    routes = []
+    if direction in ("both", "a-to-b"):
+        routes.append((a["source"], b["sink"]))
+    if direction in ("both", "b-to-a"):
+        routes.append((b["source"], a["sink"]))
+    return routes
+
+
+def endpoint_levels(plan, user, executor=run):
+    result = []
+    for side in ("A", "B"):
+        item = plan[side]
+        for scope, name in (("source", item["source"]), ("sink", item["sink"])):
+            for field in ("mute", "volume"):
+                try:
+                    value = executor(audio_cli(user, "pactl", "get-"+scope+"-"+field, name))
+                    result.append("%s %s %s: %s" % (side, scope, field, value))
+                except Exception as exc:
+                    result.append("%s %s %s: ERROR %s" % (side, scope, field, exc))
+    return "\n".join(result)
+
+
+def bridge(plan, user, seconds, latency, executor=run, sleep=time.sleep, diagnose=False, direction="both"):
     if not (5 <= seconds <= 300):
         raise BridgeError("Duration must be 5..300 seconds")
-    a, b = plan["A"], plan["B"]
+    routes = route_pairs(plan, direction)
     loaded = []
     try:
-        for source, sink in ((a["source"], b["sink"]), (b["source"], a["sink"])):
+        for source, sink in routes:
             args = audio_cli(user, *loopback_args(source, sink, latency))
             module_id = parse_module_id(executor(args))
             # Register ownership immediately. Only these IDs are ever unloaded.
             loaded.append(module_id)
             print("Active loopback module %d: %s -> %s" % (module_id, source, sink),
                   flush=True)
-        print("Two-way bridge active for %d seconds. Ctrl+C to stop." % seconds,
+        print("Bridge %s active for %d seconds. Ctrl+C to stop." % (direction, seconds),
               flush=True)
         if diagnose:
             sleep(2)
             print("=== LIVE PipeWire snapshot ===", flush=True)
             print(audio_snapshot(user, executor), flush=True)
+            print("=== Endpoint mute and gain ===", flush=True)
+            print(endpoint_levels(plan, user, executor), flush=True)
             print("=== END snapshot ===", flush=True)
         deadline = time.monotonic()+seconds
         while time.monotonic() < deadline:
@@ -237,6 +265,8 @@ def main():
     parser.add_argument("--user", default="medvetalkie")
     parser.add_argument("--seconds", type=int, default=30)
     parser.add_argument("--latency-ms", type=int, default=80)
+    parser.add_argument("--direction", choices=("both", "a-to-b", "b-to-a"), default="both",
+                        help="test one route only or both")
     parser.add_argument("--diagnose", action="store_true", help="read-only live module and stream snapshot")
     parser.add_argument("--dry-run", action="store_true",
                         help="validate both headsets and show routes without audio changes")
@@ -257,7 +287,7 @@ def main():
             raise KeyboardInterrupt
         signal.signal(signal.SIGTERM, on_term)
         try:
-            bridge(plan, args.user, args.seconds, args.latency_ms, diagnose=args.diagnose)
+            bridge(plan, args.user, args.seconds, args.latency_ms, diagnose=args.diagnose, direction=args.direction)
         finally:
             signal.signal(signal.SIGTERM, previous)
         print("Bridge stopped; test routes removed.")
