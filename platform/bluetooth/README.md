@@ -100,3 +100,30 @@ sudo python3 platform/bluetooth/medvetalkie-pcm-relay.py --direction a-to-b --se
 The output reports read KiB/s, written KiB/s, queue depth, dropped bytes, input RMS/peak dBFS, clipping count and time to first attempted playback write. At 16 kHz × mono × 16-bit the theoretical PCM data rate is **31.25 KiB/s** in steady state. If input has sensible RMS and output is being written near that speed but UGREEN is still silent, investigate whether `paplay`/PipeWire actually renders live stream rather than assuming headset microphone failure. If input falls to approximately 0 KiB/s or -180 dBFS, investigate source transport. This test does not prove audio rendering or end-to-end delay from OS pipe metrics alone. No WAV is stored by this relay.
 
 After the one-direction test, `--direction b-to-a` and `--direction both` are available, but avoid the full-duplex mode until A→B is audible and stable. Only owned `parecord`/`paplay` processes are terminated on exit. CI regression: `python3 tests/test_bt_pcm_relay.py`. No production daemon or auto-start should be enabled before physical acceptance.
+
+
+## Full-duplex tuning: acoustic feedback, long-run stability and measured diagnostics
+
+Physical tests have confirmed simultaneous intelligible speech in both AIRIDE N1 and UGREEN Studio Pro at the tested **40ms Pulse latency request / three 20ms maximum queue frames**, with user-estimated end-to-end delay around 250ms. These are not calibrated delay measurements; `startup_ms` is only time to the first local `paplay` write. No automatic production service is enabled.
+
+The PCM relay now supports a **bounded 5–600s soak test** and `--report-interval 1..30`. Its progress and final metrics include elapsed time, input PCM read/write rates, dropped queue bytes, queue high-water mark, **largest gap between PCM read calls** (`max_capture_gap_ms`) and optional noise-gate activity. The read-call gap is a scheduling indicator, *not* a measured Bluetooth HFP delay, SCO packet loss rate, or speaker-to-speaker latency. Queue drops being zero does not rule out underruns at the Bluetooth output.
+
+Run with the previously audible gain balance and a report every five seconds:
+
+```sh
+sudo python3 platform/bluetooth/medvetalkie-pcm-relay.py \
+  --direction both --seconds 120 --report-interval 5 \
+  --latency-ms 40 --queue-frames 3 \
+  --gain-a-to-b 1.0 --gain-b-to-a 0.5
+```
+
+**Opt-in noise gate** (not automatic echo cancellation): `--gate-dbfs -48` attenuates each direction below an RMS threshold of -48 dBFS to `--gate-floor 0.15` of original linear amplitude, retaining the open gate for `--gate-hang-ms 300` after speech. This can reduce feedback *during quiet pauses* but cannot remove delayed acoustic echo while someone is talking, and may clip quiet syllables. The gate is **disabled by default**; source/sink volumes and BlueZ settings are unchanged. Test cautiously with separated headsets and compare the sound against the ungated baseline:
+
+```sh
+sudo python3 platform/bluetooth/medvetalkie-pcm-relay.py \
+  --direction both --seconds 20 --latency-ms 40 --queue-frames 3 \
+  --gain-a-to-b 1.0 --gain-b-to-a 0.5 \
+  --gate-dbfs -48 --gate-floor 0.15 --gate-hang-ms 300
+```
+
+**End-to-end latency:** exact one-way time must be measured acoustically or via a synchronized endpoint loopback, using an emitted click/pulse and microphone capture with a common capture clock and correlation. A single `paplay` completion, byte count, `startup_ms`, and read-call gaps alone are **not** end-to-end measurements. Avoid inferring one-way latency from the 40ms requested Pulse buffer. Real acoustic echo cancellation (AEC), open-mic voice activity policies, auto reconnect, clipping reduction at the actual microphone source, and long-run stable operation remain outside this experimental milestone.
