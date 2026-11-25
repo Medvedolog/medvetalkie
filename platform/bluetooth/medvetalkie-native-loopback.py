@@ -58,6 +58,61 @@ def routes(plan, direction):
     return results
 
 
+
+def pipewire_snapshot(user, runner=INTERCOM.run):
+    """Read actual native PipeWire node names/links, not Pulse-compatible aliases."""
+    raw=runner(INTERCOM.audio_cli(user,"pw-dump"))
+    objects=json.loads(raw)
+    nodes={}
+    links=[]
+    for obj in objects:
+        props=obj.get("info",{}).get("props") or {}
+        if obj.get("type")=="PipeWire:Interface:Node":
+            nodes[obj["id"]]={
+                "name":str(props.get("node.name","")),
+                "description":str(props.get("node.description","")),
+                "state":str(obj.get("info",{}).get("state","")),
+                "media":str(props.get("media.class",""))
+            }
+        elif obj.get("type")=="PipeWire:Interface:Link":
+            info=obj.get("info",{})
+            links.append((info.get("output-node-id"),info.get("input-node-id"),
+                          str(info.get("state",""))))
+    return nodes,links
+
+
+def inspect_live_graph(user, targets, runner=INTERCOM.run):
+    nodes,links=pipewire_snapshot(user,runner)
+    names={node["name"]:ident for ident,node in nodes.items()}
+    report=[]
+    failures=0
+    for label,source,sink in targets:
+        source_id=names.get(source)
+        sink_id=names.get(sink)
+        related=[(ident,data) for ident,data in nodes.items()
+                 if "medvetalkie-native" in data["name"] or
+                    "loopback" in data["name"].lower() or
+                    "bluez_" in data["name"]]
+        report.append("%s: PipeWire source=%s sink=%s" % (label,source_id,sink_id))
+        if source_id is None or sink_id is None:
+            report.append("  MISMATCH: Pulse device names are not actual PipeWire node.name entries.")
+            failures+=1
+        for ident,data in related:
+            report.append("  Node %s: %s state=%s class=%s" %
+                          (ident,data["name"],data["state"],data["media"]))
+        match_links=[(out,inp,state) for out,inp,state in links
+                     if out==source_id or inp==sink_id or
+                     (out in dict(related) and inp in dict(related))]
+        report.append("  Graph links: "+repr(match_links[:24]))
+        if source_id is not None and not any(out==source_id for out,_,_ in links):
+            report.append("  WARNING: source node has no outgoing PipeWire links")
+            failures+=1
+        if sink_id is not None and not any(inp==sink_id for _,inp,_ in links):
+            report.append("  WARNING: sink node has no incoming PipeWire links")
+            failures+=1
+    return "\n".join(report),failures
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--a",default="41:42:63:27:E7:3A")
@@ -68,6 +123,7 @@ def main():
     parser.add_argument("--seconds",type=int,default=15)
     parser.add_argument("--latency-ms",type=int,default=40)
     parser.add_argument("--dry-run",action="store_true")
+    parser.add_argument("--diagnose",action="store_true", help="inspect actual native PipeWire node and link graph during playback")
     args = parser.parse_args()
     if not 5 <= args.seconds <= 60:
         parser.error("seconds must be 5..60")
@@ -99,6 +155,12 @@ def main():
                 err=proc.stderr.read().decode(errors="replace")[:700]
                 raise RuntimeError(label+" pw-loopback exited: "+err)
             print(label+" native stream process active (not proof of audio)",flush=True)
+        if args.diagnose:
+            time.sleep(1)
+            print("=== Native PipeWire node/link diagnosis ===",flush=True)
+            diagnostic,missing=inspect_live_graph(args.user,targets)
+            print(diagnostic,flush=True)
+            print("=== End graph diagnosis (%d issue(s)) ===" % missing,flush=True)
         print("Listen for live speech; Ctrl+C to stop. No AEC/gate in this experiment.",
               flush=True)
         deadline=time.monotonic()+args.seconds
