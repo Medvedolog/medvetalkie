@@ -127,3 +127,24 @@ sudo python3 platform/bluetooth/medvetalkie-pcm-relay.py \
 ```
 
 **End-to-end latency:** exact one-way time must be measured acoustically or via a synchronized endpoint loopback, using an emitted click/pulse and microphone capture with a common capture clock and correlation. A single `paplay` completion, byte count, `startup_ms`, and read-call gaps alone are **not** end-to-end measurements. Avoid inferring one-way latency from the 40ms requested Pulse buffer. Real acoustic echo cancellation (AEC), open-mic voice activity policies, auto reconnect, clipping reduction at the actual microphone source, and long-run stable operation remain outside this experimental milestone.
+
+
+## Native PipeWire comparison (separate experimental program)
+
+The proven `medvetalkie-pcm-relay.py` remains unchanged. `medvetalkie-native-loopback.py` is a separate, operator-started experiment using PipeWire's native `pw-loopback` client, **not** Pulse's `module-loopback`. It validates the two USB adapters and both active HFP devices through the same read-only BlueZ D-Bus and PipeWire checks as the successful PCM baseline. Then it starts only its own, bounded processes under the `medvetalkie` audio user. Each process uses explicit `--capture=<bluez_input>`, `--playback=<bluez_output>`, one MONO channel, latency request and `target.object` + `node.dont-reconnect` stream properties; the test never selects a default sink/source or modifies bonds, PipeWire profile, device gain, services, network or display.
+
+Verify `pw-loopback` is installed as part of `pipewire-bin`; on Debian Trixie/Armbian it accepts `--capture`, `--playback`, `--channels`, `--channel-map`, `--latency`, `--capture-props`, and `--playback-props`. First inspect the plan **without starting streams**:
+
+```sh
+sudo python3 platform/bluetooth/medvetalkie-native-loopback.py --direction a-to-b --seconds 15 --latency-ms 40 --dry-run
+```
+
+Then listen to the **AIRIDE mic -> UGREEN speaker** for 15 seconds. Wear only the necessary headphones, and keep both sets acoustically separated:
+
+```sh
+sudo python3 platform/bluetooth/medvetalkie-native-loopback.py --direction a-to-b --seconds 15 --latency-ms 40
+```
+
+The native loopback does **not** include the Python relay's `--gain-b-to-a 0.5` attenuation or the approved `--gate-dbfs -48` noise gate. Avoid native full duplex until a single direction is audibly verified; `--direction both` is reserved for a later short supervised test and is not an equivalent acoustic replacement. The native client process being alive does not prove that voice PCM was heard or that native end-to-end delay is less than the Python baseline's operator-estimated ~250ms. The listener must compare real speech quality, whether the first syllables arrive, stability and perceived delay. Revert simply by letting the 15-second native process exit; no persistent changes are made.
+
+Native PipeWire documentation: https://manpages.debian.org/trixie-backports/pipewire-bin/pw-loopback.1.en.html and https://pipewire.pages.freedesktop.org/pipewire/page_module_loopback.html. CI checks parameter safety and routing; it cannot simulate physical BT HFP sound.
