@@ -63,7 +63,7 @@ def controller_inventory(mac_a, mac_b, executor=run):
     identify the active BR/EDR link and its actual controller. No state changes.
     """
     tree = executor(["busctl", "--system", "tree", "org.bluez"])
-    adapter_paths = sorted(set(re.findall(r"/org/bluez/(hci[0-9]+)(?:/|\\b)", tree)))
+    adapter_paths = sorted(set(re.findall(r"/org/bluez/(hci[0-9]+)(?:/|\b)", tree)))
     device_paths = set(re.findall(
         r"/org/bluez/hci[0-9]+/dev_(?:[0-9A-Fa-f]{2}_){5}[0-9A-Fa-f]{2}", tree))
     if len(adapter_paths) < 2:
@@ -73,7 +73,7 @@ def controller_inventory(mac_a, mac_b, executor=run):
         adapter_path = "/org/bluez/" + adapter
         address = executor(["busctl", "--system", "get-property", "org.bluez",
                             adapter_path, "org.bluez.Adapter1", "Address"])
-        match = re.fullmatch(r's\\s+"((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})"', address.strip())
+        match = re.fullmatch(r's\s+"((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})"', address.strip())
         if not match:
             raise BridgeError("Unexpected adapter address property for %s: %s" %
                               (adapter, address[:120]))
