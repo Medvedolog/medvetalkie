@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""BlueZ 5.82 controller selection tests (no bluetoothctl -i)."""
+"""BlueZ controller-scoped CLI parser regression; also tests delayed response."""
 import importlib.util
 from pathlib import Path
-import subprocess
 import unittest
-from unittest.mock import patch
 
 path = Path(__file__).resolve().parents[1] / "platform/bluetooth/bluez_cli.py"
 spec = importlib.util.spec_from_file_location("bluez_cli", path)
@@ -16,42 +14,45 @@ C1 = "F4:4E:FC:2D:FD:4B"
 DEVICE = "41:42:63:27:E7:3A"
 
 
-class SelectedTests(unittest.TestCase):
-    def test_selected_controller_and_filter_share_session(self):
-        calls = []
-        def runner(argv, **kwargs):
-            calls.append((argv,kwargs))
-            return subprocess.CompletedProcess(argv, 0,
-                "Controller "+C0+" orangepizero3 [default]\nDevice "+DEVICE+" AIRIDE N1", "")
-        result = mod.selected(C0, "devices Connected", runner=runner)
-        self.assertIn("AIRIDE N1", result)
-        self.assertEqual(calls[0][0], ["bluetoothctl"])
-        self.assertEqual(calls[0][1]["input"],
-                         "select "+C0+"\ndevices Connected\nquit\n")
-        self.assertFalse(any("-i" in part for part in calls[0][0]))
+class BluezCliTests(unittest.TestCase):
+    def test_only_readonly_queries_are_allowed(self):
+        for query in ("devices", "devices Connected", "devices Paired",
+                      "devices Bonded", "devices Trusted", "info "+DEVICE):
+            mod.validate(C0, query)
 
-    def test_wrong_adapter_is_error_not_false_empty(self):
-        def runner(argv, **kw):
-            return subprocess.CompletedProcess(argv,0,
-                 "Controller "+C1+" [default]\n", "")
-        with self.assertRaises(mod.BluezCommandError):
-            mod.selected(C0, "devices Connected", runner=runner)
-
-    def test_no_mutating_command_or_shell_injection(self):
+    def test_no_injection_or_unsupported_cli_options(self):
         for query in ("remove "+DEVICE, "devices Connected; rm -rf /",
-                      "scan bredr", "info ;", "devices Connected\nquit"):
-            with self.assertRaises(ValueError):
-                mod.selected(C0, query)
+                      "scan bredr", "info ;", "devices Connected\nquit",
+                      "devices  Connected", "devices NotPaired"):
+            with self.subTest(query=query), self.assertRaises(ValueError):
+                mod.validate(C0, query)
         with self.assertRaises(ValueError):
-            mod.selected("bad\npower off", "devices Connected")
+            mod.validate("bad\npower off", "devices Connected")
 
-    def test_bluez_error_detected(self):
-        def runner(argv, **kw):
-            return subprocess.CompletedProcess(argv,0,
-                  "Controller "+C0+" [default]\nFailed to select controller", "")
-        with self.assertRaises(mod.BluezCommandError):
-            mod.selected(C0,"devices Connected",runner=runner)
+    def test_wait_for_following_prompt_and_not_early_echo(self):
+        self.assertFalse(mod.response_ready("[AIRIDE N1]> devices Connected\n",
+                                           "devices Connected"))
+        self.assertFalse(mod.response_ready("[AIRIDE N1]> devices Connected\n"
+                                           "Device "+DEVICE+" AIRIDE N1\n",
+                                           "devices Connected"))
+        self.assertTrue(mod.response_ready("[AIRIDE N1]> devices Connected\n"
+                                           "Device "+DEVICE+" AIRIDE N1\n"
+                                           "[AIRIDE N1]> ", "devices Connected"))
+
+    def test_empty_connected_list_is_valid_only_after_prompt(self):
+        self.assertTrue(mod.response_ready("[bluetoothctl]> devices Connected\n"
+                                           "[bluetoothctl]> ", "devices Connected"))
+
+    def test_ansi_and_carriage_return(self):
+        output = mod.clean(b"\x1b[0;94m[AIRIDE N1]>\x1b[0m devices Connected\r\n"
+                           b"Device 41:42:63:27:E7:3A AIRIDE N1\r\n"
+                           b"[AIRIDE N1]> ")
+        self.assertTrue(mod.response_ready(output, "devices Connected"))
+
+    def test_no_false_ready_from_unrelated_query(self):
+        self.assertFalse(mod.response_ready("[AIRIDE N1]> info "+DEVICE+"\n"
+                                            "[AIRIDE N1]> ", "devices Connected"))
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     unittest.main()
