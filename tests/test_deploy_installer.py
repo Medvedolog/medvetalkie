@@ -67,6 +67,29 @@ def main():
     call("--dry-run", "--proxy", "http://user:pass@192.168.11.100:10880", succeed=False)
     call("--dry-run", "--proxy", "http://192.168.11.100:10880;touch /tmp/unwanted", succeed=False)
 
+    # Real Armbian logs showed apt-get update exit 0 despite rejected
+    # signatures and cached indexes. Fail closed without disabling sqv.
+    validator = REPO / "platform" / "deploy" / "verify-apt-log.sh"
+    with tempfile.TemporaryDirectory(prefix="mt-apt-log-") as temp:
+        logfile = Path(temp) / "apt-update.log"
+        clean = "Hit:1 http://deb.debian.org/debian trixie InRelease\nReading package lists... Done\n"
+        logfile.write_text(clean)
+        result = subprocess.run(["sh", str(validator), str(logfile)],
+                                capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        cases = (
+            "W: OpenPGP signature verification failed: Not live until 2026-11-25T07:42:54Z",
+            "W: OpenPGP signature verification failed: Missing key DF00FAF1C577104B50BF1D0093D6889F9F0E78D5",
+            "W: Some index files failed to download. They have been ignored, or old ones used instead.",
+            "W: Failed to fetch http://security.debian.org trixie-security InRelease",
+            "E: The repository is not signed",
+        )
+        for warning in cases:
+            logfile.write_text(clean + warning + "\n")
+            result = subprocess.run(["sh", str(validator), str(logfile)],
+                                    capture_output=True, text=True)
+            assert result.returncode != 0, (warning, result.stdout, result.stderr)
+
     with tempfile.TemporaryDirectory(prefix="medvetalkie-deploy-sim-") as tmp:
         staging = Path(tmp)
         prefix = staging / "opt" / "medvetalkie"
