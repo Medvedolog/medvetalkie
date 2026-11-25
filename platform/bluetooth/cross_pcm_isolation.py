@@ -27,7 +27,7 @@ def one_device(mac, user):
     return sink, source, profile
 
 
-def test(user="medvetalkie", seconds=8, monitor=False):
+def test(user="medvetalkie", seconds=8, monitor=False, replay=False):
     if seconds < 4 or seconds > 20:
         raise ValueError("seconds must be 4..20")
     _, source_a, profile_a = one_device(A, user)
@@ -84,6 +84,14 @@ def test(user="medvetalkie", seconds=8, monitor=False):
     print("Half-second RMS:",metrics["windows_dbfs"])
     if monitor:
         print("Raw btmon:",trace)
+    if replay:
+        print("Now replaying captured AIRIDE microphone through UGREEN...",flush=True)
+        proc=subprocess.run(audio.audio_command(user, "paplay", "--device="+sink_b, str(wav)),
+                            capture_output=True, timeout=seconds+12, check=False)
+        if proc.returncode:
+            raise RuntimeError("Playback of captured voice failed: "+
+                               proc.stderr.decode(errors="replace")[:300])
+        print("Captured WAV playback completed. Verify by ear whether voice is present.",flush=True)
     print("Note: nonzero PCM does not prove real-time cross-headset routing.")
     return metrics
 
@@ -93,9 +101,10 @@ def main():
     parser.add_argument("--seconds",type=int,default=8)
     parser.add_argument("--user",default="medvetalkie")
     parser.add_argument("--btmon",action="store_true")
+    parser.add_argument("--replay",action="store_true", help="replay captured AIRIDE WAV on UGREEN after the concurrent test")
     args = parser.parse_args()
     try:
-        test(args.user,args.seconds,args.btmon)
+        test(args.user,args.seconds,args.btmon,args.replay)
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
         parser.exit(1,"FAILED: "+str(error)+"\n")
 
