@@ -530,3 +530,56 @@ the same work branch with the fixed installer and
 `--apply --skip-packages --enable-display`. Capture actual LCD
 status-then-Bjorni transition and FPS, and verify no restart storm.
 No unrelated Wi-Fi, kernel, boot or `main` changes.
+
+
+## 17. Root cause of persistent legacy ST7789 owner: /etc/cron.d — 2026-11-25
+
+Operator provided definitive `systemctl status 11516`, `pstree -aps`,
+`fuser` and cron source search from the physical OPiZ3:
+
+- `sudo systemctl stop medvetalkie-display` and `sudo systemctl
+  disable medvetalkie-display` completed, leaving the new display
+  unit disabled and preventing its compiler/restart storm.
+- The legacy `/dev/spidev1.0` owner remained root
+  `screensaver` PID **11516** (historical, may change), with
+  parent `11345`, process group **11342**, owner systemd cgroup
+  `/system.slice/cron.service`.
+- Exact chain: `cron 509 -> CRON 11340 -> bash 11342 ->
+  flock 11343 -> bash 11344 -> /root/medvetalkie-screensaver.sh
+  11345 -> screensaver 11516`.
+- **True autostart location conclusively found:**
+  `/etc/cron.d/medvetalkie-screensaver`, **not** root's personal
+  crontab. It contains TWO entries:
+  `@reboot root /usr/bin/flock -n -E 0
+  /run/medvetalkie-screensaver.lock ...` and a
+  `* * * * * root /usr/bin/flock -n -E 0 ...` watchdog,
+  both launching a `while :; do /bin/bash
+  /root/medvetalkie-screensaver.sh; sleep 5; done` loop.
+  Hence the previous `sudo crontab -l` filter had no effect.
+  Further, removing a cron entry does **not** terminate the
+  already running watchdog loop. Do not use stale PIDs blindly.
+- The old renderer and the new service were contending for
+  SPI1 plus DC=PC5 and RESET=PC6. This prevented display
+  dashboard appearance and drove repeated compiler restarts;
+  the observed 8–9 FPS should be remeasured after ownership
+  is exclusive.
+
+**Safe operator migration proposed (not yet verified performed):**
+move `/etc/cron.d/medvetalkie-screensaver` to an archived
+file outside `/etc/cron.d`, preserving the original script
+and global cron service; verify the current group leader
+`11342` via `ps`, then send TERM to **only that process group**
+(`kill -TERM -- -11342`) if still matching the old cron/flock
+supervisor. Verify `fuser -v /dev/spidev1.0` is empty.
+Avoid arbitrary PID kills and stopping the global cron daemon.
+
+**After SPI is free:** pull the latest existing
+`work/uwe5622-wifi-armbian` branch via the mixed proxy,
+verify the new SPI-owner preflight guard in source, and run
+`--apply --skip-packages --enable-display`. The installer
+must now fail closed if any legacy process owns SPI and only
+report success if its own renderer opens SPI. Inspect physical
+Russian status screen for the first ~8 s and Bjorni thereafter,
+measure FPS without conflicting compiler load, and capture
+`medvetalkie-display.service` logs. No result of this retry
+has been supplied yet. HFP/SCO remains unverified.
