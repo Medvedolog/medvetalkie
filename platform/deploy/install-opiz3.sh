@@ -166,7 +166,7 @@ if [[ "$MODE" == apply && "$SKIP_APT" == 0 ]]; then
    rm -f "$apt_update_log"
    die "APT update failed; check clock sync, signed repository keys and mixed proxy"
  fi
- if grep -Eiq 'Not live until|Missing key|NO_PUBKEY|OpenPGP signature|signature verification|Failed to fetch|Some index files failed|Release file.*not valid|^W:.*(signature|repository|index files)|^E:' "$apt_update_log"; then
+ if ! sh "$SOURCE_DIR/platform/deploy/verify-apt-log.sh" "$apt_update_log"; then
    cat "$apt_update_log" >&2
    rm -f "$apt_update_log"
    die "APT index verification warnings: refusing cached indexes; fix clock/key or use --skip-packages after confirming dependencies"
