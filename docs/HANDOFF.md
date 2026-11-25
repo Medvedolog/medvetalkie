@@ -860,3 +860,13 @@ User found first color TUI inadequate: arrow keys/navigation, actual menu, devic
 - Added offline `tests/test_bt_menu.py` for status parsing, merged paired/connected inventory, profile parsing, audio node lookup, gain parsing and menu action coverage; checks wired into existing build workflow. Docs: `platform/bluetooth/README.md`.
 - **Still unverified on hardware:** new curses arrow-key experience under actual SSH client; interactive BlueZ PIN/passkey responses in a live fresh pairing; accurate live RSSI for active classic link, profile switch via UI, gain controls, record/play and duplex UI. No cross-routing or second headset intercom yet. Do not call this release hardware-accepted before operator testing.
 - Keep `main` untouched; no SPI/ST7789, systemd, USB driver, image build or networking changes.
+
+
+## Headless two-controller intercom test harness — 2026-11-25
+
+User reports Bluetooth TUI still displays nothing on physical Orange Pi; **do not treat TUI as validated** and do not force further TUI troubleshooting before progressing with HFP. New development in `work/uwe5622-wifi-armbian`:
+
+- `platform/bluetooth/medvetalkie-intercom-test.py`: operator-invoked, 5–300 second cross-routing between **two distinct actually connected** HFP headsets assigned to **different** BlueZ controllers. Discover controllers and `devices Connected`, assert unique membership, inspect user `medvetalkie` PipeWire Bluetooth cards for active `headset-head-unit` or `headset-head-unit-cvsd` and exactly one source/sink for each MAC, then create two `pactl load-module module-loopback source=A.mic sink=B.speaker latency_msec=80 ...` / inverse. Unload the two allocated module IDs on completion, Ctrl+C or partial failure, without modifying services, pairing, profiles, display or network. `--dry-run` is non-mutating.
+- `tests/test_bt_intercom.py` verifies unique controller assignments, rejection of A2DP/disconnected/same-controller paths, cross-routing, unload order and rollback after partial load failure; linked to `.github/workflows/build.yml`.
+- `platform/bluetooth/README.md` adds SSH usage instructions. A second actual headset MAC has not yet been supplied, so **do not claim live dual-HFP intercom success**. First real test should begin with `--dry-run`, then an explicit bounded 30-second run and human hearing/latency feedback. Running test and CI checks must not be conflated.
+- CI workflow was launched but completion of new script's test step not confirmed at time of documentation. Container cannot resolve public GitHub raw host to execute independent local tests, so GitHub Actions is the available validation path.
