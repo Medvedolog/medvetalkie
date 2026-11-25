@@ -20,6 +20,23 @@ class PCMRelayTests(unittest.TestCase):
         self.assertEqual(route.queue.maxsize,15)
         self.assertEqual(route.queue.maxsize*mod.FRAME_MS,300)
 
+    def test_attenuation_preserves_pcm_format(self):
+        import struct
+        raw=struct.pack("<hhhh",32767,-32768,16000,-16000)
+        scaled=mod.scale_pcm(raw,0.5)
+        self.assertEqual(struct.unpack("<hhhh",scaled),(16384,-16384,8000,-8000))
+        self.assertEqual(mod.scale_pcm(raw,1.0),raw)
+
+    def test_bounded_queue_and_gain_limits(self):
+        route=mod.Route("A","medvetalkie","input","output",80,queue_frames=5,gain=0.5)
+        self.assertEqual(route.queue.maxsize,5)
+        for bad in (0,1,16):
+            with self.assertRaises(ValueError):
+                mod.Route("A","medvetalkie","input","output",80,queue_frames=bad)
+        for bad in (0,1.1,float("nan")):
+            with self.assertRaises(ValueError):
+                mod.Route("A","medvetalkie","input","output",80,gain=bad)
+
     def test_pcm_peak_rms_and_clipping(self):
         stat=mod.Stats()
         data=struct.pack("<hhhh",0,32767,-32768,16384)
