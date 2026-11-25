@@ -40,3 +40,35 @@ The existing launcher `sudo python3 platform/bluetooth/medvetalkie-bt-tui.py` no
 **Device inventory:** BlueZ's discovered-cache list is merged with `bluetoothctl devices Paired` and `bluetoothctl devices Connected` on the chosen controller. Sorted into active connections first (green ●), remembered paired/bonded devices next (◇), and remaining discovered nearby devices (·). The selected device line reports MAC, connection, pairing, trust and battery. RSSI is shown in dBm only when `bluetoothctl info` provides it, possibly from its cache; **RSSI is not guaranteed to be live**, and absent data is shown as `RSSI —`. While idle, the inventory polls around every 15 seconds. Pairing may request agent PIN, passkey or confirmation and remains subject to BlueZ/remote device support; these flows are not yet hardware-tested with a fresh unpaired headset.
 
 The menu does not automatically delete bonds, restart Bluetooth services, interfere with ST7789, change the network, or perform automatic cross-headset routing. The prior shortcut-oriented `Bench` remains in the launcher file solely for compatibility tests, but the launcher now hands control to the new menu. Verify arrow keys and pairing under the operator's actual SSH client; CI mocks cannot validate the terminal's escape sequences or Bluetooth agent prompts.
+
+
+## Headless two-headset intercom bridge (experimental, no TUI)
+
+The curses-based UI is not hardware-accepted (operator reports a blank screen); **do not depend on TUI for the next physical milestones**. The independent headless `medvetalkie-intercom-test.py` uses `bluetoothctl`, `pactl`, and the already running PipeWire headless session. It creates temporary cross-routing between the **two distinct currently connected HFP headsets on two different Bluetooth controllers**: A mic → B speaker; B mic → A speaker. It does not pair, scan, disconnect, change profiles or gains, or alter Core/network/display. The PipeWire Pulse-compatible `module-loopback` is loaded twice and both module IDs are unloaded on exit, interruption or partial failure. Default duration: 30 seconds; bound 5..300 seconds. Requires active HFP profiles for both headsets and user `medvetalkie`'s PipeWire pulse socket.
+
+To discover paired/connected devices per controller (no TUI):
+
+```sh
+bluetoothctl list
+bluetoothctl -i F4:4E:FC:57:69:64 devices Connected
+bluetoothctl -i F4:4E:FC:2D:FD:4B devices Connected
+```
+
+First verify using your actual second headset MAC:
+
+```sh
+sudo python3 platform/bluetooth/medvetalkie-intercom-test.py \
+  --a 41:42:63:27:E7:3A --b AA:BB:CC:DD:EE:FF --dry-run
+```
+
+Replace `AA:BB:CC:DD:EE:FF` with the **actual** MAC; it is deliberately a placeholder, not a claimed known headset. Once the dry-run proves both controller associations and active HFP PipeWire endpoints, run a bounded test:
+
+```sh
+sudo python3 platform/bluetooth/medvetalkie-intercom-test.py \
+  --a 41:42:63:27:E7:3A --b AA:BB:CC:DD:EE:FF \
+  --seconds 30 --latency-ms 80
+```
+
+Wear both headsets and test speech both ways, including overlapping speech. `--latency-ms` is a target and **not** a measured one-way or round-trip delay. Check subjective echo/volume/interruptions; neither low-latency performance nor sustained duplex on two ATS2851 adapters is validated yet.
+
+**Safety:** The bridge must refuse one headset on both sides, disconnected devices, devices on the same controller, unavailable HFP profile, or multiple competing sources/sinks. It creates *only* two loopback modules and unloads **only its own** allocated module IDs. If a process is killed uncleanly (e.g. SIGKILL/power loss) or cleanup fails, run `pactl list short modules` in the `medvetalkie` audio session and manually remove only the orphaned module-loopback IDs after confirming ownership; do not blindly unload all audio modules. Use `Ctrl+C` to request clean shutdown. This is a controlled hardware validation harness, not a production background intercom daemon.
