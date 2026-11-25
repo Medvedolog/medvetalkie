@@ -323,3 +323,43 @@ separately without disabling APT signature verification.
 
 **Branch policy:** continue solely in `work/uwe5622-wifi-armbian`
 (PR #1 Draft); no additional branches and no change to `main`.
+
+
+## 13. Physical ST7789 ownership blocker identified — 2026-11-25
+
+Operator's `sudo fuser -v /dev/spidev1.0` showed root
+`screensaver` PID 1026 holding SPI. Subsequent
+`systemctl status 1026 --no-pager` identified the owner as
+**cron.service**, not the new `medvetalkie-display.service`.
+The old manually installed Bjorni start path is:
+
+`root cron -> /usr/bin/flock -n -E 0 /run/medvetalkie-screensaver.lock ->
+while :; do /bin/bash /root/medvetalkie-screensaver.sh;
+sleep 5; done -> temporary embedded C screensaver`.
+
+Observed process identifiers during this inspection (may have changed):
+`cron 509`, launcher chain `667,674,690,694,1025`, renderer
+`1026`. Repeated minute-by-minute cron attempts are logged,
+although `flock` prevents duplicate active instances.
+
+**Migration procedure for the physical board:**
+back up root's current `crontab` first; comment only the exact job
+containing `/run/medvetalkie-screensaver.lock`. Keep the global
+`cron.service` running. Verify current PIDs/commands (do not rely
+on captured stale PIDs), then terminate the specific older
+supervisor/launcher via SIGTERM and confirm
+`fuser -v /dev/spidev1.0` reports no owner. Preserve the original
+`/root/medvetalkie-screensaver.sh` as a fallback.
+
+Once SPI is free, update `work/uwe5622-wifi-armbian` through the
+existing mixed proxy and run the tested opt-in installer
+`--apply --skip-packages --proxy http://192.168.11.100:10880
+--enable-display` with existing Core/status/web services preserved.
+Check actual Russian status screen, idle 8-second Bjorni transition,
+`systemctl status medvetalkie-display`, and display journal; do
+not claim physical ST7789 status switching until observed.
+
+The pasted terminal command prefixed by bracketed-paste bytes
+`^[[200~` failed to run `ps`, and `cat /proc/1026/cgroup~`
+had a stray tilde. These are terminal input artifacts, not device
+or process faults.
