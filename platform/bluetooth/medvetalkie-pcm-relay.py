@@ -285,13 +285,17 @@ def choose_routes(plan, direction):
 
 
 def execute(plan, direction, user, seconds, latency, queue_frames=QUEUE_FRAMES,
-            gain_a_to_b=1.0, gain_b_to_a=1.0):
+            gain_a_to_b=1.0, gain_b_to_a=1.0, report_interval=1,
+            gate_dbfs=None, gate_floor=0.15, gate_hang_ms=300):
     if direction not in ("a-to-b","b-to-a","both"):
         raise ValueError("Invalid direction")
-    if not 5 <= seconds <= 60:
-        raise ValueError("Duration must be 5..60s")
+    if not 5 <= seconds <= MAX_SECONDS:
+        raise ValueError("Duration must be 5..600s")
+    if not 1 <= report_interval <= 30:
+        raise ValueError("Report interval must be 1..30")
     routes=[Route(name,user,source,sink,latency,queue_frames,
-                  gain_a_to_b if name=='AIRIDE->UGREEN' else gain_b_to_a)
+                  gain_a_to_b if name=='AIRIDE->UGREEN' else gain_b_to_a,
+                  gate_dbfs,gate_floor,gate_hang_ms)
             for name,source,sink in choose_routes(plan,direction)]
     started=time.monotonic()
     try:
@@ -300,14 +304,15 @@ def execute(plan, direction, user, seconds, latency, queue_frames=QUEUE_FRAMES,
             route.begin()
         end=started+seconds
         while time.monotonic()<end:
-            time.sleep(min(1.0,max(.01,end-time.monotonic())))
+            time.sleep(min(report_interval,max(.01,end-time.monotonic())))
             elapsed=time.monotonic()-started
             for route in routes:
                 stats=route.stats.report(elapsed)
-                print("%s %.1fs read=%.1f KiB/s write=%.1f KiB/s queue=%d/%d drop=%dB RMS=%s dBFS peak=%s dBFS"%
+                print("%s %.1fs read=%.1f KiB/s write=%.1f KiB/s queue=%d/%d drop=%dB RMS=%s dBFS peak=%s dBFS max-gap=%.0fms gate=%d/%d"%
                     (route.label,elapsed,stats["capture_kib_s"],stats["playback_kib_s"],
                      route.queue.qsize(),route.queue.maxsize,stats["dropped_bytes"],
-                     stats["rms_dbfs"],stats["peak_dbfs"]),flush=True)
+                     stats["rms_dbfs"],stats["peak_dbfs"],stats["max_capture_gap_ms"],
+                     stats["gate_open_frames"],stats["gate_closed_frames"]),flush=True)
                 if any(p.poll() is not None for p in route.processes):
                     raise RuntimeError("%s: an audio client exited early" % route.label)
     finally:
