@@ -6,6 +6,8 @@ I device details, C connect, P pair (explicit), H audio diagnostics,
 L full log, Q quit. Does not alter display, network or system configuration.
 """
 import curses
+import importlib.util
+from pathlib import Path
 import os
 import queue
 import re
@@ -19,6 +21,26 @@ HEADSET = "41:42:63:27:E7:3A"
 MAC = re.compile(r"\b(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\b")
 SPIN = "|/-\\"
 COLOR_OK, COLOR_WARN, COLOR_ERR, COLOR_TITLE = 1, 2, 3, 4
+
+
+def duplex_bench(mac, monitor=False):
+    path = Path(__file__).with_name("bt_audio_bench.py")
+    spec = importlib.util.spec_from_file_location("mt_bt_audio_bench", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    result = module.execute(mac, seconds=10, monitor=monitor)
+    summary = ["10s HFP bench, profile: " + result["profile"],
+               "Playback completed: %s" % result["playback_ok"],
+               "Microphone WAV: " + result["recording"],
+               "Peak / RMS: %s / %s dBFS" % (result["metrics"]["peak_dbfs"], result["metrics"]["rms_dbfs"]),
+               "Clipped samples: %s" % result["metrics"]["clipped"],
+               "RMS per 0.5s: " + str(result["metrics"]["windows_dbfs"])]
+    if monitor:
+        summary += ["btmon: " + result["btmon"],
+                    "HCI synchronous mentions: %s" % result.get("hci_synchronous_mentions", "n/a")]
+    summary += ["Parallel clients do not alone prove SCO; examine WAV/HCI log."]
+    return 0, "\n".join(summary)
+
 
 
 def run(argv, timeout=15, env=None):
@@ -117,6 +139,7 @@ class Bench:
         self._thread = None
         self.last_refresh = 0.0
         self.pending_pair = None
+        self.pending_duplex = None
 
     def addlog(self, message):
         stamp = time.strftime("%H:%M:%S")
@@ -218,6 +241,12 @@ class Bench:
                           45 if kind == "pair" else 20)))
         elif kind == "audio":
             self.work("Диагностика PipeWire", lambda: ("audio", (0, audio_check())))
+        elif kind in ("duplex", "trace"):
+            if not device:
+                self.notice = "Выберите HFP-гарнитуру"
+                return
+            self.pending_duplex = (device["mac"], kind == "trace")
+            self.notice = "10 секунд аудиотеста %s: Y — начать, N — отменить" % device["mac"]
 
     @staticmethod
     def put(win, y, x, value, attr=0):
@@ -279,7 +308,7 @@ class Bench:
         else:
             self.put(win, h-7, 1, self.notice, curses.color_pair(COLOR_OK))
         self.put(win, h-4, 1, "1/2 адаптер   ↑↓ выбор   S поиск   R обновить   I информация")
-        self.put(win, h-3, 1, "C подключить  P сопрячь  H PipeWire  L журнал  Q выход")
+        self.put(win, h-3, 1, "C подключ. P пара H аудио D duplex T btmon L лог Q выход")
         self.put(win, h-2, 1, "При ошибке profile-unavailable: H → L; без удаления bond.",
                  curses.A_DIM)
         win.refresh()
@@ -301,7 +330,23 @@ class Bench:
             self.update()
             self.draw(win)
             key = win.getch()
+            if self.pending_duplex is not None:
+                target, trace = self.pending_duplex
+                if key == -1:
+                    time.sleep(0.07)
+                    continue
+                self.pending_duplex = None
+                if key in (ord("y"), ord("Y")):
+                    self.work("HFP duplex %s" % target,
+                              lambda: ("duplex", duplex_bench(target, trace)))
+                else:
+                    self.notice = "Аудиотест отменён"
+                time.sleep(0.07)
+                continue
             if self.pending_pair is not None:
+                if key == -1:
+                    time.sleep(0.07)
+                    continue
                 target = self.pending_pair
                 self.pending_pair = None
                 if key in (ord("y"), ord("Y")):
@@ -337,6 +382,10 @@ class Bench:
                 self.command("pair")
             elif key in (ord("h"), ord("H")):
                 self.command("audio")
+            elif key in (ord("d"), ord("D")):
+                self.command("duplex")
+            elif key in (ord("t"), ord("T")):
+                self.command("trace")
             elif key in (ord("l"), ord("L")):
                 self.full_log = not self.full_log
             time.sleep(0.07)
