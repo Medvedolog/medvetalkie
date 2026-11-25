@@ -243,3 +243,14 @@ build tree**, prepared the combined patched UWE5622 source and copied the
 extension, recovery scripts and build manifest. It **did not compile an
 Armbian `.img`**, and this smoke test must not be described as a firmware
 release.
+
+
+## Next full image build: mandatory Bluetooth voice prerequisites (TZ §28)
+
+The **next** full Orange Pi Zero 3 image must ship the headless audio stack, not merely BlueZ USB inventory. Install from authenticated Debian 13 ARM64 package indexes: `bluez`, `pipewire`, `pipewire-pulse`, `wireplumber`, `libspa-0.2-bluetooth`, `pulseaudio-utils` plus required CLI utilities (including `pactl`, `wpctl`, `pw-cli`, `btmon` and `lsusb`). Validate exact package ownership on the chosen Debian release.
+
+Image integration must make the unprivileged `medvetalkie` user audio session start headlessly after reboot without login: persistent user manager (linger or equivalent), per-user D-Bus, PipeWire/Pulse sockets and WirePlumber, with correct runtime-directory permissions. Discover the user's UID at runtime; do not hard-code 1000. Ensure the BlueZ HFP/HSP audio-gateway backend is configured and test its behavior with the packaged WirePlumber version.
+
+**Release gates:** fail the image build if the package set, Bluetooth SPA plugin, tools or units are absent; on physical hardware inspect both `10d7:b012` controllers, per-user `pactl info`, HFP headset card/profile, actual SCO/eSCO and microphone/speaker PCM. Treat two-headset simultaneous full-duplex as a distinct, not-yet-passed hardware gate. Do not assert completion from packages or device enumeration. Preserve the ST7789 ownership protections, network settings, radio blacklist and installer rollback. Fix clock/APT trust failures rather than disabling signature verification.
+
+This is a **future-build requirement**, not implemented or tested in the currently documented full-image recipe.
