@@ -396,7 +396,9 @@ def main():
         sys.exit("Bluetoothctl is missing: install bluez.")
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         sys.exit("Run in an interactive SSH terminal (TTY).")
-    curses.wrapper(Bench().main)
+    # Legacy entrypoint now launches the menu-based manager.
+    import runpy
+    runpy.run_path(str(Path(__file__).with_name("medvetalkie-bt-menu.py")), run_name="__main__")
 
 
 if __name__ == "__main__":
