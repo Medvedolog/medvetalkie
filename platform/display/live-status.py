@@ -47,7 +47,7 @@ def bus_prop(path, interface, name, executor=execute):
         except ValueError:return None
     return None
 
-def headset(mac, adapter, cards, sinks, sources, executor=execute):
+def headset(mac, adapter, cards, sinks, sources, user="medvetalkie", executor=execute):
     obj="/org/bluez/"+adapter+"/dev_"+mac.replace(":","_")
     bonded=bus_prop(obj,"org.bluez.Device1","Paired",executor)
     connected=bus_prop(obj,"org.bluez.Device1","Connected",executor)
@@ -70,7 +70,7 @@ def headset(mac, adapter, cards, sinks, sources, executor=execute):
         parts=line.split()
         if len(parts)>1 and parts[1].lower().startswith(output_prefix.lower()):
             try:
-                vol=executor(audio("medvetalkie","pactl","get-sink-volume",parts[1]))
+                vol=executor(audio(user,"pactl","get-sink-volume",parts[1]))
                 match=re.search(r"/\s*(\d+)%",vol)
                 if match:volume=min(150,int(match.group(1)))
             except (OSError,RuntimeError,subprocess.TimeoutExpired):pass
@@ -132,17 +132,16 @@ def snapshot(mac_a,mac_b,user="medvetalkie",executor=execute):
     for mac in (mac_a,mac_b):
         adapter=device_adapters.get(mac)
         if adapter:
-            result.append(headset(mac,adapter,cards,sinks,sources,executor))
+            result.append(headset(mac,adapter,cards,sinks,sources,user,executor))
         else:
             result.append(dict(state="UNASSIGNED",battery=-1,rssi=-128,volume=-1,profile="UNKNOWN",connected=False))
     a,b=result
-    voice="READY" if a["state"]=="HFP_READY" and b["state"]=="HFP_READY" else "NOT_VERIFIED"
     # Even with two HFP profiles, this is not proof an active two-way PCM
     # bridge has been established. Do not expose READY from this inventory alone.
     voice="NOT_VERIFIED"
     net=current_network(executor)
     count=sum(int(s["connected"]) for s in result)
-    return dict(mode="STANDBY",headset1=a["state"],headset2=b["state"],voice=voice,
+    return dict(mode="UNKNOWN",headset1=a["state"],headset2=b["state"],voice=voice,
                 network=net,radio="NOT_AVAILABLE",battery="UNKNOWN",
                 fault="NONE" if adapters else "BT_FAILED",
                 bt_usb=min(32,len(adapters)),bt_connected=count,
