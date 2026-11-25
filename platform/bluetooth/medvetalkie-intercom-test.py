@@ -213,7 +213,14 @@ def main():
             print("DRY RUN: no PipeWire modules were changed.")
             return 0
         print("LIVE TEST: microphones are routed crosswise. Ensure both headsets are worn.")
-        bridge(plan, args.user, args.seconds, args.latency_ms)
+        previous = signal.getsignal(signal.SIGTERM)
+        def on_term(signum, frame):
+            raise KeyboardInterrupt
+        signal.signal(signal.SIGTERM, on_term)
+        try:
+            bridge(plan, args.user, args.seconds, args.latency_ms)
+        finally:
+            signal.signal(signal.SIGTERM, previous)
         print("Bridge stopped; test routes removed.")
         return 0
     except (BridgeError, KeyError) as exc:
