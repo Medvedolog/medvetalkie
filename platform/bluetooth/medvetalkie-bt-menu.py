@@ -384,8 +384,9 @@ class Manager:
             elif data[0]=="done":
                 _,label,result,error=data
                 self.running=""
-                self.note=("%s: ошибка %s"%(label,error) if error else str(result or label))[:150]
-                self.logline(self.note)
+                detail=("%s: ошибка %s"%(label,error) if error else str(result or label))
+                self.note=detail.splitlines()[0][:150]
+                self.logline(detail)
             elif data[0]=="log":self.logline(data[1])
             elif data[0]=="lastwav":self.last_wav[data[1]]=data[2]
             elif data[0]=="agent":
