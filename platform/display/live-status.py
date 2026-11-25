@@ -142,10 +142,6 @@ def snapshot(mac_a,mac_b,user="medvetalkie",executor=execute,base=None):
     try:tree=executor(["busctl","--system","tree","org.bluez"])
     except (OSError,RuntimeError,subprocess.TimeoutExpired):tree=""
     adapters=sorted(set(re.findall(r"/org/bluez/(hci\d+)(?:\b|/)",tree)))
-    mac_to_adapter={}
-    for adapter in adapters:
-        address=bus_prop("/org/bluez/"+adapter,"org.bluez.Adapter1","Address",executor)
-        if isinstance(address,str):mac_to_adapter[address.upper()]=adapter
     # Only known bonded device object paths count. No false mapping by adapter order.
     device_adapters={}
     for mac in (mac_a,mac_b):
@@ -174,10 +170,12 @@ def snapshot(mac_a,mac_b,user="medvetalkie",executor=execute,base=None):
     voice="NOT_VERIFIED"
     net=current_network(executor)
     count=sum(int(s["connected"]) for s in result)
+    usb_count=sum(1 for adapter in adapters
+                  if "/usb" in str((Path("/sys/class/bluetooth")/adapter/"device").resolve()))
     state=dict(mode="UNKNOWN",headset1=a["state"],headset2=b["state"],voice=voice,
                 network=net,radio="NOT_AVAILABLE",battery="UNKNOWN",
                 fault="NONE" if adapters else "BT_FAILED",
-                bt_usb=min(32,len(adapters)),bt_connected=count,
+                bt_usb=min(32,usb_count),bt_connected=count,
                 h1_battery=a["battery"],h2_battery=b["battery"],
                 h1_rssi=a["rssi"],h2_rssi=b["rssi"],
                 h1_volume=a["volume"],h2_volume=b["volume"],
@@ -188,7 +186,11 @@ def snapshot(mac_a,mac_b,user="medvetalkie",executor=execute,base=None):
             state["mode"]="CORE_OFFLINE"
             state["fault"]="CORE_OFFLINE"
         else:
-            state.update(authoritative)
+            state["mode"]=authoritative["mode"]
+            for key in ("network","radio"):
+                if key in authoritative:state[key]=authoritative[key]
+            if authoritative["fault"]!="NONE":
+                state["fault"]=authoritative["fault"]
     return state
 
 def encode(data):
