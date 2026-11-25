@@ -287,8 +287,10 @@ for unit in $(units); do systemctl stop "$unit" >/dev/null 2>&1 || :; done
 # An externally supervised renderer can appear between preflight and
 # activation. Never let two GPIO/SPI clients compete after stop.
 if ((DISPLAY)); then
- sh "$SOURCE_DIR/platform/deploy/check-display-owner.sh" --require-free ||
-   die "SPI not released after stopping managed display; rolling back"
+ if ! sh "$SOURCE_DIR/platform/deploy/check-display-owner.sh" --require-free; then
+   echo "SPI not released after stopping managed display; rolling back" >&2
+   false
+ fi
 fi
 mv "$STAGE" "$release"; STAGE=""
 # Verify the *actual service user* can traverse the entire installed
