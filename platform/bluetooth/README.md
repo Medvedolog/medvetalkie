@@ -84,3 +84,19 @@ Wear both headsets and test speech both ways, including overlapping speech. `--l
 ## BlueZ 5.82 CLI compatibility (important)
 
 The Orange Pi has BlueZ 5.82. **There is no `bluetoothctl -i` option.** Controller selection is performed **inside the same `bluetoothctl` session** using `select <controller MAC>`, followed by `devices Connected`, `devices Paired`, `info <device MAC>` or other commands. The headless bridge and menu's inventory use `platform/bluetooth/bluez_cli.py` to run scoped, read-only commands and verify controller selection, avoiding accidental queries on the default adapter. Regression: `python3 tests/test_bluez_cli.py`. Operator-confirmed inventory output is still required for hardware acceptance.
+
+
+## Live PCM relay experiment (after silent Pulse module-loopback)
+
+`platform/bluetooth/medvetalkie-pcm-relay.py` is a **bounded, operator-launched** real-time PCM relay designed to diagnose the failure of cross-headset live voice despite successful simultaneous AIRIDE capture and UGREEN playback of short diagnostic pips, and successful delayed WAV replay. It does **not** modify the existing `medvetalkie-intercom-test.py`, BlueZ controller pairing/profiles, volumes, services or display. It validates both controller associations and HFP sources/sinks with the proven BlueZ D-Bus + PipeWire dry-run, then starts `parecord --raw` and `paplay --raw` against exact PipeWire device names with 16 kHz mono signed 16-bit audio, 20 ms block size, explicit 80 ms latency target and max 15 queued frames (300 ms). An overfull queue drops the oldest frame instead of accumulating infinite delay.
+
+Run first in **A→B only** mode (wear both headsets, speak continuously into AIRIDE):
+```sh
+cd ~/medvetalkie
+sudo python3 platform/bluetooth/medvetalkie-pcm-relay.py --dry-run
+sudo python3 platform/bluetooth/medvetalkie-pcm-relay.py --direction a-to-b --seconds 12 --latency-ms 80
+```
+
+The output reports read KiB/s, written KiB/s, queue depth, dropped bytes, input RMS/peak dBFS, clipping count and time to first attempted playback write. At 16 kHz × mono × 16-bit the theoretical PCM data rate is **31.25 KiB/s** in steady state. If input has sensible RMS and output is being written near that speed but UGREEN is still silent, investigate whether `paplay`/PipeWire actually renders live stream rather than assuming headset microphone failure. If input falls to approximately 0 KiB/s or -180 dBFS, investigate source transport. This test does not prove audio rendering or end-to-end delay from OS pipe metrics alone. No WAV is stored by this relay.
+
+After the one-direction test, `--direction b-to-a` and `--direction both` are available, but avoid the full-duplex mode until A→B is audible and stable. Only owned `parecord`/`paplay` processes are terminated on exit. CI regression: `python3 tests/test_bt_pcm_relay.py`. No production daemon or auto-start should be enabled before physical acceptance.
