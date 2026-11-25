@@ -32,6 +32,25 @@ python3 tests/test_display_status_v2.py
 python3 tests/test_display_live_status.py
 ```
 
+## Combining with authoritative Core state (optional)
+
+When the existing C publisher is running, keep its file distinct and have the
+v2 reader inherit validated `mode`, `network`, `radio` and `fault` from its
+fresh `MTSTATUS1` snapshot:
+
+```sh
+sudo python3 platform/display/live-status.py \
+  --base-status-file /run/medvetalkie/display.status \
+  --output /tmp/medvetalkie-status-v2 --interval 2
+```
+
+The example base path must be checked against the installed systemd unit. A
+missing, stale, malformed or inaccessible base is explicitly marked
+`CORE_OFFLINE`, rather than fabricating an active operating mode. Even a Core
+fault value `NONE` cannot mask a missing observed USB Bluetooth controller.
+The `voice` status remains `NOT_VERIFIED` unless a future audio engine publishes
+validated active duplex routing.
+
 ## Later on-board supervised verification (do not run concurrently with Bjorni)
 
 Keep the existing display service untouched until physically present. After inspecting `sudo fuser -v /dev/spidev1.0`, stop the **known owner** using its corresponding service or process. Start the v2 publisher in a different shell with an independent status path; do not run legacy `medvetalkie-display-status` against that path:
