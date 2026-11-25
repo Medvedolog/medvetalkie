@@ -81,6 +81,13 @@ def parse_device_info(text):
     return flags
 
 
+def rssi_indicator(value):
+    if value is None:
+        return "----"
+    bars = 4 if value >= -60 else (3 if value >= -70 else (2 if value >= -80 else 1))
+    return "|" * bars + "." * (4-bars)
+
+
 def device_group(device):
     if device.get("connected"): return 0
     if device.get("paired") or device.get("bonded"): return 1
@@ -424,14 +431,17 @@ class Manager:
         self.put(0,2,"MEDVETALKIE  /  BLUETOOTH MANAGER",curses.color_pair(4)|curses.A_BOLD)
         self.put(1,2,"Контроллер: "+str(self.controller() or "нет")+"   [PgUp / PgDn для смены]",curses.color_pair(4))
         self.put(2,2,"Tab: панель  ↑↓: выбор  Enter: действие  Esc: назад  Q: выход",curses.A_DIM)
-        self.put(4,2,"УСТРОЙСТВА · активные / сопряжённые / рядом",curses.A_BOLD)
+        active=sum(bool(d.get("connected")) for d in self.devices)
+        remembered=sum(bool(d.get("paired") or d.get("bonded")) and not d.get("connected") for d in self.devices)
+        self.put(3,2,"В сети: %d    Сохранены: %d    Всего: %d"%(active,remembered,len(self.devices)),curses.color_pair(2))
+        self.put(4,2,"УСТРОЙСТВА · ● / ◇ / ·",curses.A_BOLD)
         self.put(4,37,"ДЕЙСТВИЯ",curses.A_BOLD)
         height=h-12
         first=max(0,self.device_index-height+1)
         for i,d in enumerate(self.devices[first:first+height],first):
             icon="●" if d.get("connected") else ("◇" if device_group(d)==1 else "·")
             rssi=("%d dBm"%d["rssi"]) if d.get("rssi") is not None else "RSSI —"
-            text="%s %s %s"%(icon,d["name"][:14],rssi)
+            text="%s %s %s %s"%(icon,d["name"][:12],rssi_indicator(d.get("rssi")),rssi)
             attr=curses.A_REVERSE if self.focus==0 and i==self.device_index else (
                  curses.color_pair(2) if d.get("connected") else 0)
             self.put(5+i-first,2,text[:33],attr)
