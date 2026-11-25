@@ -6,6 +6,7 @@ RMS, clipping and bounded audio queue overruns. Does not change BlueZ/PipeWire
 profiles, pairings, gains, default routes, or long-lived system services.
 """
 import argparse
+import math
 from array import array
 import importlib.util
 import os
@@ -27,7 +28,7 @@ CHANNELS = 1
 SAMPLE_BYTES = 2
 FRAME_MS = 20
 FRAME_BYTES = RATE * CHANNELS * SAMPLE_BYTES * FRAME_MS // 1000  # 640 bytes
-QUEUE_FRAMES = 15  # 300ms upper bound, drop oldest instead of growing indefinitely
+QUEUE_FRAMES = 15  # configurable 2..15 frames
 
 
 def pulse_args(user, program, endpoint, latency_ms=80):
@@ -42,6 +43,23 @@ def pulse_args(user, program, endpoint, latency_ms=80):
         "--latency-msec=%d" % latency_ms,
         "--process-time-msec=%d" % FRAME_MS)
 
+
+
+def scale_pcm(frame, gain):
+    """Attenuate little-endian signed 16-bit PCM without modifying user audio settings."""
+    if not math.isfinite(gain) or not 0.25 <= gain <= 1.0:
+        raise ValueError("Gain must be 0.25..1.0")
+    if gain == 1.0:
+        return frame
+    samples=array("h")
+    samples.frombytes(frame)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    for i, sample in enumerate(samples):
+        samples[i]=max(-32768,min(32767,round(sample*gain)))
+    if sys.byteorder != "little":
+        samples.byteswap()
+    return samples.tobytes()
 
 class Stats:
     def __init__(self):
@@ -98,13 +116,18 @@ class Stats:
 
 
 class Route:
-    def __init__(self, label, user, source, sink, latency):
+    def __init__(self, label, user, source, sink, latency, queue_frames=QUEUE_FRAMES, gain=1.0):
         self.label=label
         self.user=user
         self.source=source
         self.sink=sink
         self.latency=latency
-        self.queue=queue.Queue(maxsize=QUEUE_FRAMES)
+        if not 2 <= queue_frames <= 15:
+            raise ValueError('Queue depth must be 2..15')
+        if not math.isfinite(gain) or not 0.25 <= gain <= 1.0:
+            raise ValueError('Gain must be 0.25..1.0')
+        self.gain=gain
+        self.queue=queue.Queue(maxsize=queue_frames)
         self.stats=Stats()
         self.stop=threading.Event()
         self.processes=[]
@@ -141,7 +164,7 @@ class Route:
                 self.stats.capture(data,time.monotonic())
                 pending.extend(data)
                 while len(pending)>=FRAME_BYTES:
-                    frame=bytes(pending[:FRAME_BYTES])
+                    frame=scale_pcm(bytes(pending[:FRAME_BYTES]), self.gain)
                     del pending[:FRAME_BYTES]
                     try:
                         self.queue.put_nowait(frame)
@@ -200,12 +223,14 @@ def choose_routes(plan, direction):
     ]
 
 
-def execute(plan, direction, user, seconds, latency):
+def execute(plan, direction, user, seconds, latency, queue_frames=QUEUE_FRAMES,
+            gain_a_to_b=1.0, gain_b_to_a=1.0):
     if direction not in ("a-to-b","b-to-a","both"):
         raise ValueError("Invalid direction")
     if not 5 <= seconds <= 60:
         raise ValueError("Duration must be 5..60s")
-    routes=[Route(name,user,source,sink,latency)
+    routes=[Route(name,user,source,sink,latency,queue_frames,
+                  gain_a_to_b if name=='AIRIDE->UGREEN' else gain_b_to_a)
             for name,source,sink in choose_routes(plan,direction)]
     started=time.monotonic()
     try:
@@ -218,9 +243,9 @@ def execute(plan, direction, user, seconds, latency):
             elapsed=time.monotonic()-started
             for route in routes:
                 stats=route.stats.report(elapsed)
-                print("%s %.1fs read=%.1f KiB/s write=%.1f KiB/s queue=%d/15 drop=%dB RMS=%s dBFS peak=%s dBFS"%
+                print("%s %.1fs read=%.1f KiB/s write=%.1f KiB/s queue=%d/%d drop=%dB RMS=%s dBFS peak=%s dBFS"%
                     (route.label,elapsed,stats["capture_kib_s"],stats["playback_kib_s"],
-                     route.queue.qsize(),stats["dropped_bytes"],
+                     route.queue.qsize(),route.queue.maxsize,stats["dropped_bytes"],
                      stats["rms_dbfs"],stats["peak_dbfs"]),flush=True)
                 if any(p.poll() is not None for p in route.processes):
                     raise RuntimeError("%s: an audio client exited early" % route.label)
@@ -240,17 +265,26 @@ def main():
     parser.add_argument("--direction",choices=("a-to-b","b-to-a","both"),default="a-to-b")
     parser.add_argument("--seconds",type=int,default=12)
     parser.add_argument("--latency-ms",type=int,default=80)
+    parser.add_argument("--queue-frames",type=int,default=QUEUE_FRAMES)
+    parser.add_argument("--gain-a-to-b",type=float,default=1.0)
+    parser.add_argument("--gain-b-to-a",type=float,default=1.0)
     parser.add_argument("--dry-run",action="store_true")
     args=parser.parse_args()
     try:
+        if not 2 <= args.queue_frames <= 15:
+            raise ValueError('Queue frames must be 2..15')
+        if not all(math.isfinite(v) and 0.25 <= v <= 1.0 for v in (args.gain_a_to_b,args.gain_b_to_a)):
+            raise ValueError('Gains must be finite 0.25..1.0')
+        if not 40 <= args.latency_ms <= 500:
+            raise ValueError('Latency must be 40..500ms')
         plan=MT.validate(args.a,args.b,args.user)
         routes=choose_routes(plan,args.direction)
-        print("16 kHz s16le mono, 20ms frames, 300ms bounded queue; latency target %dms"%args.latency_ms)
+        print("16 kHz s16le mono, 20ms frames, %dms bounded queue; latency target %dms"%(args.queue_frames*20,args.latency_ms))
         for name,source,sink in routes:print(name,source,"->",sink)
         if args.dry_run:
             print("DRY RUN: no audio streams started")
             return
-        execute(plan,args.direction,args.user,args.seconds,args.latency_ms)
+        execute(plan,args.direction,args.user,args.seconds,args.latency_ms,args.queue_frames,args.gain_a_to_b,args.gain_b_to_a)
     except (ValueError,RuntimeError,OSError,KeyError) as exc:
         parser.exit(2,"FAILED: "+str(exc)+"\n")
     except KeyboardInterrupt:
