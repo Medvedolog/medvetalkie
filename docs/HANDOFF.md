@@ -832,3 +832,8 @@ Next hardware plan: repeat the microphone/playback test under `headset-head-unit
 ## AIRIDE N1 mSBC subjective comparison — 2026-11-25
 
 Operator repeated real headset microphone recording and playback after selecting `headset-head-unit` (mSBC) and reported **better voice quality than CVSD, but relatively low volume**. This is a human observation for the first UGREEN / AIRIDE N1 path, not calibrated codec/SCO/latency evidence. Next check playback sink gain and headset hardware volume first (90% target, no above-100% software boost); separately inspect microphone source gain and only raise it to 100% if lower, then re-evaluate recordings for distortion. No claim of simultaneous duplex or second headset readiness.
+
+
+## AIRIDE N1 gain adjustment — 2026-11-25
+
+Operator reports satisfactory playback volume after previous recommendation of a 90% Bluetooth sink level, and explicitly states they set the headset microphone source volume to **120%**. 90% is the suggested sink target, **not independently confirmed by a readback**; confirm via `pactl get-sink-volume` if used as a product default. The 120% microphone level is a user-applied experimental gain, not a calibrated safe default; test loud speech for clipping and noise before persisting. mSBC sequential microphone record/playback remains operator confirmed. Full duplex and second headset remain unverified.
