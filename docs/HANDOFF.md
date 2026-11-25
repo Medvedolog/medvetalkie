@@ -935,3 +935,10 @@ The real hardware stdout confirmed success:
 - `A microphone -> B speaker; B microphone -> A speaker`; target loopback latency 80 ms; final `DRY RUN: no PipeWire modules were changed.`
 
 This is the **first operator-confirmed physical dry-run success** for both concurrently connected HFP headsets and their scoped cross-routing plan. The D-Bus controller verification fixed the prior false timeout. Do NOT label the intercom's live PCM full-duplex audio as tested yet: user still needs to run an explicit bounded 30s live bridge, listen in both directions, and confirm two modules unloaded on exit, then assess echo, quality, interruption, delay and HCI trace. TUI remains unaccepted; main branch untouched.
+
+
+## First live intercom test: both headsets silent — 2026-11-25
+
+After both HFP endpoints and a successful physical `--dry-run`, user reports **total silence in both AIRIDE N1 and UGREEN Studio Pro** during attempted live bridge. No console stdout, module IDs, sink-inputs/source-outputs, or HCI trace from that live attempt have been supplied. Do not claim successful audio or assign cause to USB hardware before examining active PipeWire graphs.
+
+Added opt-in `--diagnose` for live `medvetalkie-intercom-test.py`: after two `module-loopback` loads and a short settle interval, print read-only `pactl list short` snapshots of loopback modules, sink-inputs, source-outputs, Bluetooth sinks and sources. Retains module cleanup. Added offline read-only test `test_read_only_live_diagnostics`. Hardware validation pending. Next run bounded 15-second test with `--diagnose`, capture exact terminal output; inspect missing module, missing streams, suspended endpoints or incorrect route and distinguish PipeWire failure from HFP SCO failure. Test headset listening/recording independently if needed. No pairing, gain, driver or profile changes yet.
