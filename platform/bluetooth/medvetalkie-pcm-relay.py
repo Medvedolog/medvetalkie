@@ -29,6 +29,40 @@ SAMPLE_BYTES = 2
 FRAME_MS = 20
 FRAME_BYTES = RATE * CHANNELS * SAMPLE_BYTES * FRAME_MS // 1000  # 640 bytes
 QUEUE_FRAMES = 15  # configurable 2..15 frames
+MAX_SECONDS = 600
+
+def frame_level_dbfs(frame):
+    samples = array("h")
+    samples.frombytes(frame)
+    if sys.byteorder != "little":
+        samples.byteswap()
+    if not samples:
+        return -180.0
+    return 10*math.log10(max(sum(i*i for i in samples)/len(samples)/(32768.0**2), 1e-18))
+
+class NoiseGate:
+    """Optional speech-level expander, NOT acoustic echo cancellation."""
+    def __init__(self, threshold, floor=0.15, hang_frames=15):
+        if not math.isfinite(threshold) or not -70 <= threshold <= -20:
+            raise ValueError("Gate threshold invalid")
+        if not math.isfinite(floor) or not 0 <= floor <= 1:
+            raise ValueError("Gate floor invalid")
+        if not 0 <= hang_frames <= 100:
+            raise ValueError("Gate hang invalid")
+        self.threshold, self.floor, self.hang_frames = threshold, floor, hang_frames
+        self.remaining = self.open_frames = self.closed_frames = 0
+    def process(self, frame):
+        if frame_level_dbfs(frame) >= self.threshold:
+            self.remaining = self.hang_frames
+            self.open_frames += 1
+            return frame
+        if self.remaining:
+            self.remaining -= 1
+            self.open_frames += 1
+            return frame
+        self.closed_frames += 1
+        return scale_pcm(frame,self.floor) if self.floor else bytes(len(frame))
+
 
 
 def pulse_args(user, program, endpoint, latency_ms=80):
@@ -74,10 +108,18 @@ class Stats:
         self.first_playback = None
         self.pending_frames = 0
         self.errors = []
+        self.max_capture_gap_ms = 0.0
+        self.last_capture_at = None
+        self.queue_high_water = 0
+        self.gate_open_frames = 0
+        self.gate_closed_frames = 0
 
     def capture(self, data, now):
         if self.first_pcm is None:
             self.first_pcm = now
+        if self.last_capture_at is not None:
+            self.max_capture_gap_ms = max(self.max_capture_gap_ms, (now - self.last_capture_at)*1000)
+        self.last_capture_at = now
         self.received += len(data)
         even = data[:len(data) & ~1]
         vals = array("h")
@@ -111,6 +153,10 @@ class Stats:
             "playback_kib_s": round(self.forwarded/max(.001,seconds)/1024,1),
             "startup_ms": (round((self.first_playback-self.first_pcm)*1000)
                            if self.first_playback is not None and self.first_pcm is not None else None),
+            "max_capture_gap_ms": round(self.max_capture_gap_ms,1),
+            "queue_high_water": self.queue_high_water,
+            "gate_open_frames": self.gate_open_frames,
+            "gate_closed_frames": self.gate_closed_frames,
             "errors": list(self.errors)
         }
 
