@@ -27,6 +27,14 @@ jobs:
       - name: Optional ST7789 v2 status screen preview
         run: python3 tests/test_display_status_v2.py
 
+      - name: Render exact C-generated ST7789 PNG screens
+        run: python3 tests/render_actual_st7789_screens.py --output /tmp/medvetalkie-st7789-previews
+      - uses: actions/upload-artifact@v4
+        with:
+          name: medvetalkie-st7789-original-screens
+          path: /tmp/medvetalkie-st7789-previews/*.png
+          retention-days: 14
+
       - name: In-place installer simulated filesystem and mixed-proxy validation
         run: python3 tests/test_deploy_installer.py
 
