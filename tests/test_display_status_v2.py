@@ -63,5 +63,11 @@ with tempfile.TemporaryDirectory(prefix="mt-status-v2-") as temp:
     assert len({radio,game,intercom,system,fault})==5, "each approved screen must differ"
     assert detailed!=system, "connected headsets must show card dashboard, not system view"
     source=(SAVER/"build-status-v2.py").read_text()
-    assert "happy_bear" in source and "render_game_v2" in source
-    print("PASS ST7789 v2 320x240 four modes, smiling headphone bear, strict status fallback")
+    assert "happy_bear" in source and "full_bear" in source
+    assert "render_game_v2" in source
+    assert "full_bear(25,43,94,142)" in source
+    assert "full_bear(220,43,89,142)" in source
+    assert "happy_bear(x+74,105,2" in source
+    assert "full_bear_idx[7776]" in generated.read_text()
+    assert (SAVER/"medvetalkie-full-bear.palette16.z.b64").is_file()
+    print("PASS ST7789 v2: full-body paws/keyboard in radio/game/system, headphone head in intercom")
