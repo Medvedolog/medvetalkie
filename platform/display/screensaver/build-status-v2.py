@@ -65,7 +65,8 @@ def enhance(source):
  {'%',{17,18,2,4,8,9,17}}, {'+',{0,4,4,31,4,4,0}}""")
     first=source.index('static void status_row(')
     last=source.index('\nstatic unsigned read_le(',first)
-    screen=V2_SCREEN.replace("/* BEAR_PIXEL_RESOURCE */", bear_pixel_resource())
+    screen=(V2_SCREEN.replace("/* BEAR_PIXEL_RESOURCE */", bear_pixel_resource())
+                     .replace("/* FULL_BODY_PIXEL_RESOURCE */", full_body_pixel_resource()))
     return source[:first]+screen+source[last:]
 
 
@@ -96,6 +97,33 @@ def bear_pixel_resource():
             f"static const uint8_t bear_alpha[{width*height}]={{\n"+chunks(mask)+
             "\n};\n")
 
+def full_body_pixel_resource():
+    """Original operator-provided full-body mascot, palette16; offline build only.
+
+    Includes hooded torso, keyboard, hands and paws. Transparent index 0.
+    There are no runtime PNG or zlib requirements in the C binary.
+    """
+    encoded=(HERE / "medvetalkie-full-bear.palette16.z.b64").read_text().strip()
+    blob=zlib.decompress(base64.b64decode(encoded, validate=True))
+    w,h=72,108
+    if len(blob)<1 or blob[0]!=16 or len(blob)!=1+2*16+w*h:
+        raise ValueError("Wrong dimensions/palette for full-body bear")
+    palette=[0]
+    for i in range(16):
+        palette.append(blob[1+2*i] | (blob[1+2*i+1]<<8))
+    indexes=blob[33:]
+    if any(x>16 for x in indexes):
+        raise ValueError("Full-body bear has invalid colour index")
+    def rows(values):
+        return "\\n".join(
+            "    "+",".join(str(n) for n in values[i:i+24])+","
+            for i in range(0,len(values),24))
+    return (f"/* User-supplied full bear: hoodie, keyboard, hands, feet, {w}x{h}. */\\n"
+            "static const uint16_t full_bear_palette[17]={"+
+            ",".join(str(x) for x in palette)+"};\\n"
+            f"static const uint8_t full_bear_idx[{w*h}]={{\\n"+
+            rows(indexes)+"\\n};\\n")
+
 V2_SCREEN=r'''/* Four approved 320x240 layouts. No button control, read-only status. */
 static uint16_t state_colour(const char *s)
 {
@@ -125,6 +153,20 @@ static void happy_bear(int x,int y,int k,uint16_t cup)
             int sx=dx*88/w;
             unsigned index=(unsigned)(sy*88+sx);
             if(bear_alpha[index])dot(left+dx,top+dy,bear_rgb565[index]);
+        }
+    }
+}
+/* FULL_BODY_PIXEL_RESOURCE */
+/* Exact downsampled full-body reference mascot with both paws and keyboard. */
+static void full_bear(int x,int y,int w,int h)
+{
+    if(w<=0 || h<=0)return;
+    for(int dy=0;dy<h;dy++){
+        int sy=dy*108/h;
+        for(int dx=0;dx<w;dx++){
+            int sx=dx*72/w;
+            unsigned index=full_bear_idx[sy*72+sx];
+            if(index)dot(x+dx,y+dy,full_bear_palette[index]);
         }
     }
 }
@@ -190,7 +232,7 @@ static void render_radio_v2(time_t wall,const display_status *s)
 {
     memset(pixels,0,sizeof(pixels));topbar_v2(wall,s->mode);
     rect(8,40,304,147,rgb(10,45,72));
-    happy_bear(79,110,2,rgb(39,174,248));
+    full_bear(25,43,94,142);
     ru_text(135,66,"РАДИО",2,rgb(242,247,251));
     text(135,106,s->radio,1,rgb(57,224,138));
     ru_text(135,137,"ЧАСТОТА",1,rgb(153,184,204));
@@ -212,7 +254,7 @@ static void render_game_v2(time_t wall,const display_status *s)
 {
     memset(pixels,0,sizeof(pixels));topbar_v2(wall,s->mode);
     rect(8,40,304,147,rgb(12,45,76));
-    happy_bear(83,110,2,rgb(45,166,246));
+    full_bear(25,43,94,142);
     ru_text(163,63,"ИГРЫ",2,rgb(235,245,252));
     ru_text(163,105,"РЕЖИМ",1,rgb(145,180,201));
     text(163,121,s->mode,1,rgb(59,226,139));
@@ -222,7 +264,7 @@ static void render_system_v2(time_t wall,const display_status *s)
 {
     memset(pixels,0,sizeof(pixels));topbar_v2(wall,s->mode);
     rect(8,39,304,149,rgb(12,44,75));
-    ru_text(33,49,"СОСТОЯНИЕ СИСТЕМЫ",1,rgb(236,246,252));
+    ru_text(20,49,"СОСТОЯНИЕ СИСТЕМЫ",1,rgb(236,246,252));
     ru_text(20,73,"РЕЖИМ",1,rgb(154,185,203));
     text(107,73,s->mode,1,rgb(244,247,252));
     ru_text(20,96,"ГОЛОС",1,rgb(154,185,203));
@@ -234,7 +276,7 @@ static void render_system_v2(time_t wall,const display_status *s)
     text(107,142,buf,1,rgb(244,247,252));
     ru_text(20,165,"РАДИО",1,rgb(154,185,203));
     text(107,165,s->radio,1,rgb(244,247,252));
-    happy_bear(270,111,1,rgb(43,164,246));
+    full_bear(220,43,89,142);
     rect(8,195,304,37,rgb(18,51,64));
     text(20,208,strcmp(s->fault,"NONE")?s->fault:"SYSTEM OK",1,
          strcmp(s->fault,"NONE")?rgb(255,95,106):rgb(60,224,132));
