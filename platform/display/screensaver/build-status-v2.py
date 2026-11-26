@@ -115,14 +115,14 @@ def full_body_pixel_resource():
     if any(x>16 for x in indexes):
         raise ValueError("Full-body bear has invalid colour index")
     def rows(values):
-        return "\\n".join(
+        return "\n".join(
             "    "+",".join(str(n) for n in values[i:i+24])+","
             for i in range(0,len(values),24))
-    return (f"/* User-supplied full bear: hoodie, keyboard, hands, feet, {w}x{h}. */\\n"
+    return (f"/* User-supplied full bear: hoodie, keyboard, hands, feet, {w}x{h}. */\n"
             "static const uint16_t full_bear_palette[17]={"+
-            ",".join(str(x) for x in palette)+"};\\n"
-            f"static const uint8_t full_bear_idx[{w*h}]={{\\n"+
-            rows(indexes)+"\\n};\\n")
+            ",".join(str(x) for x in palette)+"};\n"
+            f"static const uint8_t full_bear_idx[{w*h}]={{\n"+
+            rows(indexes)+"\n};\n")
 
 V2_SCREEN=r'''/* Four approved 320x240 layouts. No button control, read-only status. */
 static uint16_t state_colour(const char *s)
