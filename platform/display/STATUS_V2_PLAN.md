@@ -85,3 +85,27 @@ The optional v2 now selects distinct 320x240 screens based on validated state:
 The top bar uses the real local clock. The numeric bitmap font now supports percent signs. Available status data are real observations only; the illustration approval's sample signal percentages, device IP, battery and frequency were illustrative and are NOT injected as fake live data.
 
 CI `tests/test_display_status_v2.py` compares actual rendered 320x240 PPM frames for intercom/radio/game/system/fault, and checks that varied status data change the resulting image. Physical ST7789 visual QA remains pending until the owner returns.
+
+## Full-body bear on Radio, Games and System — 2026-11-26
+
+On request, the Radio, Games and System views now display the **complete
+operator-supplied pixel-art mascot**, including the brown head, green hoodie,
+hands holding the keyboard and both feet/paws. The source is cropped from the
+original uploaded `1000306350.png`, nearest-neighbour sampled to 72x108,
+and reduced to a 16-colour RGB565 palette with transparent index 0. The
+compressed, versioned build asset is
+`platform/display/screensaver/medvetalkie-full-bear.palette16.z.b64`.
+
+`build-status-v2.py` validates/decompresses the asset **at build time**, emits
+C const palette and index arrays and draws it without extra runtime libraries.
+Placement: Radio and Games at x=25, y=43, 94x142 pixels; System at x=220,
+y=43, 89x142 pixels. All artwork fits in the 320x240 status content region,
+leaving the header, relevant status text and footer intact.
+
+The **Intercom screen is intentionally unchanged**: each headset card still
+uses only the operator-approved original bear **head wearing blue padded
+over-ear headphones**. The original Bjorni screensaver also remains untouched.
+
+CI preview and physical display acceptance remain separate: automated PNG
+frames are 320x240 renderer output with simulated values; no auto-update
+of the actual SPI service is performed.
