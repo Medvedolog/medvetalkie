@@ -152,29 +152,22 @@ static void card_v2(int x,const char *name,const char *state,const char *profile
     char buf[30];
     rect(x,39,149,149,base);
     rect(x,39,149,3,c);
-    text(x+10,48,name,2,white);
-    /* Much larger bear, with no text or overlay covering its face. */
-    happy_bear(x+49,106,2,rgb(43,164,246));
-    disc(x+121,76,5,c);
-    text(x+92,85,profile,1,c);
-    if(!strcmp(state,"DISCONNECTED"))text(x+91,101,"OFF",1,c);
-    else if(!strcmp(state,"UNASSIGNED"))text(x+91,101,"--",1,c);
-    else if(!strcmp(state,"HFP_READY"))text(x+91,101,"VOICE",1,c);
-    else text(x+91,101,"LINK",1,c);
-    /* Battery and RSSI only from actual telemetry. */
+    text(x+10,47,name,2,white);
+    disc(x+132,54,5,c);
+    /* Face occupies its own row; labels must never cross the headphones. */
+    happy_bear(x+74,110,2,rgb(43,164,246));
+    text(x+10,151,profile,1,c);
     if(battery>=0)snprintf(buf,sizeof(buf),"%d%%",battery);
     else strcpy(buf,"--");
-    text(x+95,119,buf,1,white);
-    bar_v2(x+94,130,45,battery,battery>=0&&battery<20?rgb(239,76,77):rgb(52,223,124));
+    text(x+53,151,buf,1,white);
     if(rssi!=-128)snprintf(buf,sizeof(buf),"%d",rssi);
     else strcpy(buf,"--");
-    text(x+12,151,buf,1,white);
-    text(x+46,151,"DBM",1,dim);
+    text(x+104,151,buf,1,dim);
+    bar_v2(x+10,169,129,volume,rgb(39,194,246));
     if(volume>=0)snprintf(buf,sizeof(buf),"%d%%",volume);
     else strcpy(buf,"--");
-    text(x+105,151,buf,1,white);
-    bar_v2(x+12,167,125,volume,rgb(39,194,246));
-    ru_text(x+12,178,"ГРОМКОСТЬ",1,dim);
+    text(x+106,178,buf,1,white);
+    ru_text(x+10,178,"ГРОМКОСТЬ",1,dim);
 }
 static void bottom_v2(const display_status *s)
 {
@@ -246,6 +239,7 @@ static void render_system_v2(time_t wall,const display_status *s)
     text(107,142,buf,1,rgb(244,247,252));
     ru_text(20,165,"РАДИО",1,rgb(154,185,203));
     text(107,165,s->radio,1,rgb(244,247,252));
+    happy_bear(270,111,1,rgb(43,164,246));
     rect(8,195,304,37,rgb(18,51,64));
     text(20,208,strcmp(s->fault,"NONE")?s->fault:"SYSTEM OK",1,
          strcmp(s->fault,"NONE")?rgb(255,95,106):rgb(60,224,132));
