@@ -191,6 +191,16 @@ static void render_warning_v2(time_t wall,const display_status *s)
     text(163,122,s->fault,1,rgb(255,205,211));
     bottom_v2(s);
 }
+static void render_game_v2(time_t wall,const display_status *s)
+{
+    memset(pixels,0,sizeof(pixels));topbar_v2(wall,s->mode);
+    rect(8,40,304,147,rgb(12,45,76));
+    happy_bear(83,110,2,rgb(45,166,246));
+    ru_text(163,63,"ИГРЫ",2,rgb(235,245,252));
+    ru_text(163,105,"РЕЖИМ",1,rgb(145,180,201));
+    text(163,121,s->mode,1,rgb(59,226,139));
+    bottom_v2(s);
+}
 static void render_system_v2(time_t wall,const display_status *s)
 {
     memset(pixels,0,sizeof(pixels));topbar_v2(wall,s->mode);
@@ -216,7 +226,7 @@ static void render_status(time_t wall,const display_status *s)
     if(strcmp(s->fault,"NONE") && strcmp(s->fault,"CORE_OFFLINE"))
         render_warning_v2(wall,s);
     else if(!strcmp(s->mode,"RADIO"))render_radio_v2(wall,s);
-    else if(!strcmp(s->mode,"GAME"))render_warning_v2(wall,s);
+    else if(!strcmp(s->mode,"GAME"))render_game_v2(wall,s);
     else if(!strcmp(s->mode,"INTERCOM") || s->bt_connected>0)
         render_intercom_v2(wall,s);
     else render_system_v2(wall,s);
