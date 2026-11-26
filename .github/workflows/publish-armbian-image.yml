@@ -1,0 +1,148 @@
+name: Preserve Armbian image in GitHub Pre-release
+
+on:
+  push:
+    branches: ['work/uwe5622-wifi-armbian']
+    paths: ['.github/workflows/publish-armbian-image.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-opiz3-20261119-usb-bt-stock
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'Medvedolog/medvetalkie' && github.ref == 'refs/heads/work/uwe5622-wifi-armbian'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RUN_ID: '44553170064'
+      ARTIFACT_ID: '14546986556'
+      SOURCE_SHA: db1d92675b28688a9a12d37f8e3eb9ebf9dfe62c
+      RELEASE_TAG: opiz3-20261119-usb-bt-stock
+      ASSET_NAME: MedveTalkie_OPiZero3_20261119_USB-BT_stock_UNTESTED.zip
+      ARCHIVE_SHA256: 7308d8312a5abde764624d1bcfe44ad4e4ff655288723eb861530b2b6eeaff52
+    steps:
+      - name: Verify source build and download the original artifact ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/actions/runs/$RUN_ID" > source-run.json
+          gh api "repos/$REPO/actions/artifacts/$ARTIFACT_ID" > source-artifact.json
+          jq -e --arg sha "$SOURCE_SHA" '.status == "completed" and .conclusion == "success" and .head_sha == $sha' source-run.json
+          jq -e --arg sha "$SOURCE_SHA" --arg digest "sha256:$ARCHIVE_SHA256" --argjson run "$RUN_ID" '.expired == false and .workflow_run.id == $run and .workflow_run.head_sha == $sha and .digest == $digest' source-artifact.json
+          mkdir -p release-assets
+          gh api "repos/$REPO/actions/artifacts/$ARTIFACT_ID/zip" > "release-assets/$ASSET_NAME"
+          (cd release-assets && printf '%s  %s\n' "$ARCHIVE_SHA256" "$ASSET_NAME" > SHA256SUMS && sha256sum -c SHA256SUMS)
+
+      - name: Verify the raw image against its original checksum and check ZIP integrity
+        shell: python
+        run: |
+          import hashlib
+          import pathlib
+          import re
+          import zipfile
+          
+          archive = pathlib.Path("release-assets") / __import__("os").environ["ASSET_NAME"]
+          with zipfile.ZipFile(archive) as z:
+              entries = [i for i in z.infolist() if not i.is_dir()]
+              names = [i.filename for i in entries]
+              assert len(names) == len(set(names)), "Duplicate ZIP members"
+              assert all(not pathlib.PurePosixPath(n).is_absolute() and ".." not in pathlib.PurePosixPath(n).parts for n in names), "Unsafe ZIP paths"
+              images = [n for n in names if n.endswith(".img")]
+              assert len(images) == 1, f"Expected one raw image: {images}"
+              image = images[0]
+              hashes = {n: hashlib.new(n) for n in ("sha256", "sha512")}
+              with z.open(image) as stream:
+                  while chunk := stream.read(8 * 1024 * 1024):
+                      for h in hashes.values():
+                          h.update(chunk)
+              verified = 0
+              for name in names:
+                  if name.endswith((".sha", ".sha256", ".sha512")):
+                      for line in z.read(name).decode("utf-8").splitlines():
+                          match = re.fullmatch(r"([a-fA-F0-9]{64}|[a-fA-F0-9]{128})\s+\*?(.+)", line.strip())
+                          if match and pathlib.PurePosixPath(match[2]).name == pathlib.PurePosixPath(image).name:
+                              alg = "sha256" if len(match[1]) == 64 else "sha512"
+                              assert hashes[alg].hexdigest() == match[1].lower(), f"Image checksum mismatch: {name}"
+                              verified += 1
+              assert verified > 0, "No matching original image checksum"
+              for name in names:
+                  if name != image:
+                      with z.open(name) as stream:
+                          while stream.read(1024 * 1024):
+                              pass
+              image_hash = hashes["sha256"].hexdigest()
+              pathlib.Path("release-assets/IMAGE-SHA256SUMS").write_text(f"{image_hash}  {pathlib.PurePosixPath(image).name}\n")
+              print(f"Verified original image checksums: {verified}")
+              print(f"Image SHA256: {image_hash}")
+              print("ZIP members:")
+              for item in entries:
+                  print(f"  {item.filename}: {item.file_size} bytes")
+
+      - name: Prepare release description
+        shell: bash
+        run: |
+          cat > release-notes.md <<'NOTES'
+          Экспериментальный образ Linux для **Orange Pi Zero 3 (H618)**: Armbian, Debian 13 (trixie), без рабочего стола. Сборка от **19 ноября 2026 года**, профиль Wi-Fi AP+STA, штатный USB Bluetooth.
+          
+          ### Подключение после загрузки
+          
+          | Интерфейс | Настройки |
+          | --- | --- |
+          | Встроенный Ethernet (`end0`) | **192.168.11.1/24**, маска **255.255.255.0**, DHCP для подключённого компьютера |
+          | Встроенный Wi-Fi (`wlan0`) | Точка доступа **MedveTalkie**, пароль **Medve12345!** |
+          | Адрес Wi-Fi | **192.168.12.1/24**, DHCP; 5 ГГц, канал 36 |
+          
+          Ethernet и Wi-Fi работают в отдельных подсетях. Для первой проверки подключайте Ethernet напрямую к компьютеру или к отдельному коммутатору: на этом интерфейсе включён DHCP-сервер. Стандартный Wi-Fi пароль предназначен для первоначальной настройки.
+          
+          ### Что включено
+          
+          - Согласованные с ядром модули UWE5622 и адаптированные Wi-Fi исправления; профиль AP+STA.
+          - BlueZ, штатный `btusb`, `firmware-realtek`, `usbutils` — основа для испытаний двух внешних USB Bluetooth-адаптеров. Точный чипсет и работа HFP ещё требуют проверки.
+          - Автозапуск встроенного Bluetooth AW859A отключён; экспериментальные патчи `sprdbt_tty` к этому образу не применены.
+          - Диагностика сети и Bluetooth, проверка ABI модулей, скрипты восстановления Wi-Fi и исходные патчи с описаниями. Автоматический сброс SDIO по CP-assert не включён.
+          
+          ### Статус
+          
+          **Сборка в CI успешна. Загрузка этого образа на плате, фактическая работа LAN/AP, одновременный двусторонний звук двух гарнитур и стабильность ещё не подтверждены.** Приложение MedveTalkie остаётся каркасом; готового интеркома, WebUI и интерфейса ST7789/LVGL в этом образе нет. Настройка PipeWire/WirePlumber и проверка HFP — следующий этап.
+          
+          ### Загрузка и проверка
+          
+          Скачайте ZIP и `SHA256SUMS`, проверьте архив (`sha256sum -c SHA256SUMS`), распакуйте его и запишите файл `.img` на **отдельную microSD**. Сохраните рабочую карту. В ZIP сохранены исходные `.img`, контрольная сумма и метаданные Armbian. Дополнительный `IMAGE-SHA256SUMS` содержит SHA256 распакованного образа.
+          
+          Это сохранённый исходный артефакт успешной сборки, без пересборки и изменения образа. Файлы в GitHub Release не зависят от срока хранения GitHub Actions artifacts.
+          
+          - [Исходная сборка #44553170064](https://github.com/Medvedolog/medvetalkie/actions/runs/44553170064)
+          - [Исходный коммит `db1d926`](https://github.com/Medvedolog/medvetalkie/commit/db1d92675b28688a9a12d37f8e3eb9ebf9dfe62c)
+          - [Профиль сборки и диагностика](https://github.com/Medvedolog/medvetalkie/blob/db1d92675b28688a9a12d37f8e3eb9ebf9dfe62c/platform/armbian-image/README.md)
+          NOTES
+
+      - name: Upload verified files to a draft, then publish as a pre-release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$REPO" --json isDraft > existing-release.json; then
+            jq -e '.isDraft == true' existing-release.json
+            test "$(gh api "repos/$REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')" = "$SOURCE_SHA"
+          else
+            gh release create "$RELEASE_TAG" --repo "$REPO" --target "$SOURCE_SHA" \
+              --draft --prerelease --latest=false \
+              --title "MedveTalkie OPi Zero 3 — Linux 2026-11-19 · USB BT · UNTESTED" \
+              --notes-file release-notes.md
+          fi
+          gh release upload "$RELEASE_TAG" --repo "$REPO" --clobber \
+            "release-assets/$ASSET_NAME" release-assets/SHA256SUMS release-assets/IMAGE-SHA256SUMS
+          gh release view "$RELEASE_TAG" --repo "$REPO" --json assets > uploaded-assets.json
+          jq -e --arg name "$ASSET_NAME" \
+            '([.assets[].name] | sort) == ([$name, "SHA256SUMS", "IMAGE-SHA256SUMS"] | sort)' uploaded-assets.json
+          gh release edit "$RELEASE_TAG" --repo "$REPO" --draft=false --prerelease --latest=false \
+            --title "MedveTalkie OPi Zero 3 — Linux 2026-11-19 · USB BT · UNTESTED" \
+            --notes-file release-notes.md
+          gh release view "$RELEASE_TAG" --repo "$REPO" --json url,isDraft,isPrerelease,assets

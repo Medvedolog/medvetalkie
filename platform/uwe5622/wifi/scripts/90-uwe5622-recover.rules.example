@@ -1,0 +1,4 @@
+# TEMPLATE ONLY: DO NOT INSTALL before observing the exact CP-assert uevent.
+# The platform 'change' event ALONE is not sufficient evidence of CP assert.
+# After verifying a specific vendor-exported assert marker, add that match here.
+# ACTION=="change", SUBSYSTEM=="platform", KERNEL=="unisoc_wifi", ENV{SYSTEMD_WANTS}+="medvetalkie-uwe5622-recover.service"

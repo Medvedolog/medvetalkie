@@ -1,0 +1,22 @@
+# Managed by MedveTalkie installer
+[Unit]
+Description=MedveTalkie Core-to-ST7789 status publisher
+After=medvetalkie-core.service
+Wants=medvetalkie-core.service
+
+[Service]
+Type=simple
+User=medvetalkie
+Group=medvetalkie
+ExecStart=/opt/medvetalkie/current/bin/medvetalkie-display-status --ipc-socket /run/medvetalkie/control.sock --output /run/medvetalkie/display.status --interval 2
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+# Status writer shares the core-owned private runtime directory.
+ReadWritePaths=/run/medvetalkie
+
+[Install]
+WantedBy=multi-user.target

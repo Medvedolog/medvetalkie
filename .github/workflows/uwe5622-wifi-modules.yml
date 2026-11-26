@@ -1,0 +1,98 @@
+name: UWE5622 Wi-Fi ARM64 experimental modules
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/uwe5622-wifi-modules.yml'
+      - 'platform/uwe5622/wifi/scripts/build-wifi-modules.sh'
+      - 'platform/uwe5622/wifi/patches/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uwe5622-wifi-experimental-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  modules:
+    name: Native ARM64 / ${{ matrix.profile }} / 6.18.60
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:trixie
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [p0, apsta]
+    env:
+      KVER: 6.18.60-current-sunxi64
+      UWE_REF: bbb8aac1d7cf671af8dd07d3d9a17e0fd35ea880
+      OPENWRT_REF: 29b6faf6b08a2b62097e509eb0fa62720ab48996
+      HEADERS_DEB: linux-headers-current-sunxi64_26.11.0-trunk.120_arm64__6.18.60-Sf45e-D68f5-P034b-Cecfd-H0759-HK01ba-Vc222-B0577-R448a.deb
+      HEADERS_BASE: https://repo.armbian.com/incoming/community/debs-beta
+      HEADERS_SHA256: ff5247313924b0851af4983466483050b25a2434aa65f9acae99631c1c999cc6
+      EXPECTED_KERNEL_RELEASE: 6.18.60-current-sunxi64
+      WIFI_PROFILE: ${{ matrix.profile }}
+      BUILD_JOBS: 2
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native toolchain
+        run: |
+          set -eu
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            make gcc libc6-dev bison flex libssl-dev libelf-dev bc git curl patch \
+            binutils kmod file dwarves ca-certificates xz-utils python3-minimal
+          gcc --version | head -1
+
+      - name: Verify exact Armbian 6.18.60 header package
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --connect-timeout 15 --max-time 240 \
+            "${HEADERS_BASE}/${HEADERS_DEB}" -o /tmp/armbian-headers.deb
+          echo "${HEADERS_SHA256}  /tmp/armbian-headers.deb" | sha256sum -c -
+          dpkg-deb -f /tmp/armbian-headers.deb Package Version Architecture
+          test "$(dpkg-deb -f /tmp/armbian-headers.deb Version)" = "26.11.0-trunk.120"
+          test "$(dpkg-deb -f /tmp/armbian-headers.deb Architecture)" = "arm64"
+          sha256sum /tmp/armbian-headers.deb
+          dpkg -i /tmp/armbian-headers.deb
+          KDIR="/lib/modules/${KVER}/build"
+          test -e "$KDIR/Makefile"
+          test -s "$KDIR/Module.symvers"
+          grep -Fx "#define UTS_RELEASE \"${KVER}\"" "$KDIR/include/generated/utsrelease.h"
+          grep -E '^CONFIG_(MODVERSIONS|MODULE_SIG|MODULE_UNLOAD)=' "$KDIR/.config" || :
+
+      - name: Checkout pinned, clean driver and OpenWrt patch sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone -q https://github.com/armbian/uwe5622.git uwe5622
+          git -C uwe5622 checkout -q --detach "$UWE_REF"
+          git clone -q https://github.com/Medvedolog/opiz3-wlan-backport.git opiz3-wlan-backport
+          git -C opiz3-wlan-backport checkout -q --detach "$OPENWRT_REF"
+          test "$(git -C uwe5622 rev-parse HEAD)" = "$UWE_REF"
+          test "$(git -C opiz3-wlan-backport rev-parse HEAD)" = "$OPENWRT_REF"
+
+      - name: Build only BSP + WLAN for experimental profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n platform/uwe5622/wifi/scripts/build-wifi-modules.sh
+          bash platform/uwe5622/wifi/scripts/build-wifi-modules.sh \
+            uwe5622 opiz3-wlan-backport "/lib/modules/${KVER}/build" artifact
+          sha256sum /tmp/armbian-headers.deb > artifact/HEADER-PACKAGE-SHA256.txt
+          cp artifact/PATCHES.txt /tmp/uwe5622-applied-patches.txt
+          cat artifact/README-NOT-FOR-INSTALL.txt
+          cat artifact/PATCHES.txt
+
+      - name: Upload quarantine-only build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: uwe5622-wifi-${{ matrix.profile }}-6.18.60-UNVERIFIED
+          path: artifact/
+          retention-days: 7
+          if-no-files-found: error

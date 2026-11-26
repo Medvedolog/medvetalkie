@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Offline regression tests for bounded cross-HFP PCM relay."""
+import importlib.util
+import math
+from pathlib import Path
+import struct
+import unittest
+from unittest.mock import patch
+
+path=Path(__file__).resolve().parents[1]/"platform/bluetooth/medvetalkie-pcm-relay.py"
+spec=importlib.util.spec_from_file_location("mt_pcm_relay",path)
+mod=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+
+
+class PCMRelayTests(unittest.TestCase):
+    def test_20ms_frame_size_and_bounded_queue(self):
+        self.assertEqual(mod.FRAME_BYTES,640)
+        route=mod.Route("test","medvetalkie","input","output",80)
+        self.assertEqual(route.queue.maxsize,15)
+        self.assertEqual(route.queue.maxsize*mod.FRAME_MS,300)
+
+    def test_attenuation_preserves_pcm_format(self):
+        import struct
+        raw=struct.pack("<hhhh",32767,-32768,16000,-16000)
+        scaled=mod.scale_pcm(raw,0.5)
+        self.assertEqual(struct.unpack("<hhhh",scaled),(16384,-16384,8000,-8000))
+        self.assertEqual(mod.scale_pcm(raw,1.0),raw)
+
+    def test_bounded_queue_and_gain_limits(self):
+        route=mod.Route("A","medvetalkie","input","output",80,queue_frames=5,gain=0.5)
+        self.assertEqual(route.queue.maxsize,5)
+        for bad in (0,1,16):
+            with self.assertRaises(ValueError):
+                mod.Route("A","medvetalkie","input","output",80,queue_frames=bad)
+        for bad in (0,1.1,float("nan")):
+            with self.assertRaises(ValueError):
+                mod.Route("A","medvetalkie","input","output",80,gain=bad)
+
+    def test_noise_gate_and_speech_hangover(self):
+        import struct
+        silent=bytes(mod.FRAME_BYTES)
+        voice=struct.pack("<h",10000)*(mod.FRAME_BYTES//2)
+        gate=mod.NoiseGate(-48,0.15,hang_frames=2)
+        self.assertEqual(gate.process(silent),silent)
+        self.assertEqual(gate.closed_frames,1)
+        self.assertEqual(gate.process(voice),voice)
+        self.assertEqual(gate.process(silent),silent)
+        self.assertEqual(gate.process(silent),silent)
+        self.assertEqual(gate.closed_frames,1)
+        self.assertEqual(gate.process(voice),voice)
+        attenuated=gate.process(voice)
+        self.assertEqual(attenuated,voice)
+
+    def test_gate_quiet_frame_attenuation(self):
+        import struct
+        frame=struct.pack("<h",100)*(mod.FRAME_BYTES//2)
+        gate=mod.NoiseGate(-30,0.15,hang_frames=0)
+        changed=gate.process(frame)
+        self.assertEqual(struct.unpack("<h",changed[:2])[0],15)
+        self.assertEqual(gate.closed_frames,1)
+
+    def test_gate_is_off_by_default(self):
+        route=mod.Route("A","medvetalkie","input","output",40,queue_frames=3)
+        self.assertIsNone(route.gate)
+        enabled=mod.Route("A","medvetalkie","input","output",40,queue_frames=3,
+                          gate_dbfs=-48,gate_floor=0.15)
+        self.assertIsNotNone(enabled.gate)
+
+    def test_capture_gap_reporting(self):
+        stat=mod.Stats()
+        stat.capture(bytes(mod.FRAME_BYTES),1.0)
+        stat.capture(bytes(mod.FRAME_BYTES),1.05)
+        self.assertEqual(stat.report(1)["max_capture_gap_ms"],50.0)
+
+    def test_long_soak_limit(self):
+        with patch.object(mod.Route,"begin") as begin:
+            with self.assertRaises(ValueError):
+                mod.execute({"A":{},"B":{}},"both","medvetalkie",601,40)
+        begin.assert_not_called()
+        self.assertEqual(mod.MAX_SECONDS,600)
+
+    def test_pcm_peak_rms_and_clipping(self):
+        stat=mod.Stats()
+        data=struct.pack("<hhhh",0,32767,-32768,16384)
+        stat.capture(data,1.0)
+        stat.write(4,1.04)
+        result=stat.report(1)
+        self.assertEqual(result["received_bytes"],8)
+        self.assertEqual(result["forwarded_bytes"],4)
+        self.assertEqual(result["clipped_samples"],2)
+        self.assertEqual(result["peak_dbfs"],0.0)
+        self.assertEqual(result["startup_ms"],40)
+        self.assertGreater(result["rms_dbfs"],-5)
+
+    def test_zero_pcm_is_reported(self):
+        stat=mod.Stats()
+        stat.capture(bytes(640),1)
+        result=stat.report(1)
+        self.assertLess(result["rms_dbfs"],-100)
+        self.assertEqual(result["clipped_samples"],0)
+
+    def test_args_have_mono_low_latency_and_exact_target(self):
+        with patch.object(mod.MT,"audio_cli",side_effect=lambda user,*parts:list(parts)):
+            recv=mod.pulse_args("medvetalkie","parecord","bluez_input.A",80)
+            send=mod.pulse_args("medvetalkie","paplay","bluez_output.B",80)
+        for args in (recv,send):
+            self.assertIn("--raw",args)
+            self.assertIn("--rate=16000",args)
+            self.assertIn("--channels=1",args)
+            self.assertIn("--format=s16le",args)
+            self.assertIn("--latency-msec=80",args)
+            self.assertIn("--process-time-msec=20",args)
+        self.assertIn("--device=bluez_input.A",recv)
+        self.assertIn("--device=bluez_output.B",send)
+
+    def test_rejects_unsafe_latency(self):
+        for value in (-1,0,20,1000):
+            with self.assertRaises(ValueError):
+                mod.pulse_args("medvetalkie","paplay","sink",value)
+
+    def test_route_isolation(self):
+        plan={"A":{"source":"a-mic","sink":"a-speaker"},
+              "B":{"source":"b-mic","sink":"b-speaker"}}
+        self.assertEqual(mod.choose_routes(plan,"a-to-b"),
+                         [("AIRIDE->UGREEN","a-mic","b-speaker")])
+        self.assertEqual(mod.choose_routes(plan,"b-to-a"),
+                         [("UGREEN->AIRIDE","b-mic","a-speaker")])
+        self.assertEqual(len(mod.choose_routes(plan,"both")),2)
+
+    def test_duration_rejected_before_creating_streams(self):
+        with patch.object(mod.Route,"begin") as begin:
+            with self.assertRaises(ValueError):
+                mod.execute({"A":{},"B":{}},"a-to-b","medvetalkie",601,80)
+        begin.assert_not_called()
+
+
+if __name__=="__main__":
+    unittest.main()

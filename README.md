@@ -8,6 +8,8 @@ MedveTalkie is a modular motorcycle/bicycle intercom prototype built around an O
 
 The current priority is **proving stable HFP microphone + speaker operation on real hardware**, not shipping an untested product.
 
+**Development handoff:** [docs/HANDOFF.md](docs/HANDOFF.md) — current branches, test coverage, simulated vs real-hardware validation, display status integration and next gates. Update it with each substantive iteration.
+
 ## System overview
 
 ![MedveTalkie detailed prototype architecture](docs/assets/medvetalkie-architecture-en.svg)
@@ -38,6 +40,20 @@ The native application is **C11**, split into failure-isolated processes:
 BlueZ, PipeWire and WirePlumber remain system services. Audio samples are **never routed through HTTP or through the core daemon**. Services will use versioned Unix-domain-socket IPC, with operation IDs and asynchronous completion events. SQLite stores app settings; BlueZ stores bond credentials.
 
 See [Architecture](docs/ARCHITECTURE.md), [hardware validation](docs/VALIDATION.md), [roadmap](docs/ROADMAP.md) and [API design](docs/IPC.md).
+
+## Custom Armbian image (Orange Pi Zero 3)
+
+The [full-image build profile](platform/armbian-image/README.md) stages reviewed AW859A Wi-Fi fixes and optional SDIO Bluetooth transport patches. It compiles BSP, Wi-Fi and BT modules against the **same kernel ABI** as the newly built Armbian image; USB Bluetooth remains supported by the stock kernel. [GitHub Actions](.github/workflows/armbian-full-image.yml) validates source profiles on push and offers a **manual** full-image build on a host with at least 50 GiB free. **No bootable custom Armbian image or board-level validation is claimed yet.**
+
+**Armbian in-place deployment via mixed HTTP proxy:** [installer, dry-run, systemd services, simulation and rollback](platform/deploy/README.md). No reflash or built-in Wi-Fi/BT reactivation is required.
+
+## Core API, Bluetooth and display-status integration
+
+The current work branch contains both the Armbian/ST7789 renderer and the experimental Core API v1. The Core process supplies versioned JSON over a private Unix socket; an independent CivetWeb process is loopback-only and read-only. SQLite stores **desired settings**, while live Bluetooth observation uses kernel sysfs and the system BlueZ D-Bus. Neither `Paired` nor `Connected` proves two-way HFP/SCO audio.
+
+A separate `medvetalkie-display-status` process publishes a strict `MTSTATUS1` status snapshot, consumed by the single ST7789/Bjorni renderer. The renderer displays Russian-labelled status screens and falls back to Bjorni during confirmed standby. See [display documentation](platform/display/README.md), [IPC contract](docs/IPC.md) and [canonical development handoff](docs/HANDOFF.md).
+
+This integration is **software-tested**, not installed on the live Orange Pi. No Bluetooth audio, persistent unit/service start or authenticated remote WebUI is claimed ready. The combined CI runs CTest, display regressions and a Core-to-PPM smoke test.
 
 ## Current state
 

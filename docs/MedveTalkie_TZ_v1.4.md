@@ -1,6 +1,6 @@
 # MedveTalkie Intercom
 
-**Техническое задание — версия 1.4 (проект, 06.11.2026)**  
+**Техническое задание — версия 1.4 (проект, 06.11.2026; дополнения 12–24.11.2026, включая единый API)**  
 **Платформа:** Orange Pi Zero 3 (Allwinner H618), Armbian Debian 13 ARM64  
 **Основной сценарий:** двусторонняя связь двух пользователей с универсальными Bluetooth-гарнитурами; пассажир сзади или отдельный велосипед/самокат. Дополнительный сценарий: одиночная поездка с Android-смартфоном вместо второго участника.  
 **Состояние:** концепция и план испытаний; работоспособность HFP/SCO на выбранном железе ещё не подтверждена.
@@ -374,7 +374,7 @@ Ethernet, Wi-Fi-клиент, USB LTE или смартфонный источн
 
 **Decision:** native C11 on Armbian CLI; avoid Python/Go/Rust runtime dependencies in the deployed product. Build via CMake. Do not claim runtime/audio efficiency until measured.
 
-- `medvetalkied` (core): desired state, asynchronous command dispatch, SQLite app configuration, event stream, CivetWeb HTTP/WebSocket API. HTTP errors must not block control operations, but a process crash still kills its co-located HTTP service; this limitation is accepted for the first prototype.
+- `medvetalkied` (core): desired state, asynchronous command dispatch, SQLite app configuration, versioned Unix IPC and event stream; HTTP/WebSocket resides in an independent `medvetalkie-web` process. HTTP errors must not block control operations, but a process crash still kills its co-located HTTP service; this limitation is accepted for the first prototype.
 - `medvetalkie-bt` (Bluetooth): BlueZ D-Bus integration, controller discovery by stable identity rather than `hciN`, headset pairing, HFP/HSP connection readiness, audio profile transitions and retry policy.
 - `medvetalkie-ui` (LVGL): SPI ST7789/HDMI simulator and GPIO input as independent restartable client; it must not own business logic.
 - BlueZ, PipeWire and WirePlumber run independently; the core must never pass raw PCM through IPC/HTTP.
@@ -421,3 +421,227 @@ Use stock Armbian headless first; record kernel version, `uname -a`, hardware id
 4. Dual headset full-duplex is verified on real Orange Pi Zero 3; only then mark intercom as working.
 5. Web settings and HDMI emulator developed independently of SPI arrival.
 6. Power measurements logged externally using a USB 5 V power meter, with experimental CPU governors and limits.
+
+## 25. Web Alpha, USB identity and observability (2026-11-12 amendment)
+
+This section is normative for the first web/control implementation; unimplemented features must remain marked as planned. Existing dual-HFP acceptance gates remain unchanged.
+
+### 25.1 Priorities and boundaries
+
+P0: safe inventory of hardware, stable logical bindings, lifecycle/reconnect reporting and read-only diagnostics. P1: единый core API + отдельный authenticated CivetWeb status/configuration UI, BlueZ D-Bus controller/headset management and asynchronous operations. P1: PipeWire/WirePlumber route tests for ATS Mini V4 analog audio via USB input to an A2DP helmet headset, followed by test speech mixing and ducking. P2: Wi-Fi STA/AP setup after coexistence validation with AW859A/UWE5622. SPI LVGL display is deferred; it consumes the same state/event model as WebUI. No fabricated functional HFP, GATT or radio controls.
+
+### 25.2 USB and Bluetooth stable identity
+
+- Never persist USB Bus/Device numbers, /dev/sdX, ALSA card indices, PipeWire numeric node IDs or hciN as device identity; they are volatile after reboot and hotplug.
+- Inventory devices from sysfs/udev: VID/PID, manufacturer/product, optional serial, USB interface and driver, physical-port topology, and (for Bluetooth controllers) controller address. Treat all reported attributes as evidence, not proof of unique identity.
+- Maintain logical roles HEADSET_A, HEADSET_B, BT_CONTROLLER_A/B, RADIO_AUDIO and RADIO_CONTROL independently of runtime enumeration.
+- Match using verified unique serial or controller address where available. Detect duplicate or absent serial numbers. For indistinguishable devices, a previously user-confirmed physical-port binding may be used; moving such a device to another indistinguishable port requires explicit reassignment. Never silently swap two active HFP roles.
+- Device match outcomes: MATCHED, MISSING, AMBIGUOUS, CHANGED. Do not automatically pair unknown headsets, overwrite bonds or reuse another controller's pairing keys.
+- Monitor udev add/remove/change and reconcile desired against observed state with bounded exponential backoff and jitter. On removal, mark only affected routes DEGRADED; never restart the whole core to cure a peripheral failure.
+- Track USB enumeration changes over reboots, device resets, adapter disappearance, controller and headset reconnect counts and route restoration time.
+
+### 25.3 System and Bluetooth diagnostics
+
+- Web diagnostics pages: system (board/revision, Armbian/kernel, service versions, uptime, temperature), memory (MemAvailable, total and per-service RSS/CPU), networking (interface, MAC, IP, Wi-Fi mode/SSID/RSSI if available), USB tree (equivalent to lsusb -t plus errors), Bluetooth (controller stable ID/current hciN, associated headset, profile/codec, actual battery data), event log and health.
+- Surface D-Bus/BlueZ, kernel USB/HCI, PipeWire/WirePlumber and systemd service failures with timestamp, affected logical device, event type, recovery attempts and outcome. Keep bounded history and a downloadable scrubbed diagnostic bundle (no Wi-Fi passwords, pairing keys or secrets).
+- Bluetooth link RSSI in dBm is optional and capability-dependent; an unavailable or stale reading is UNKNOWN, never invented. Reconnect/dropout trends and flapping warnings must still work without RSSI. Initial configurable flapping rule: 5 disconnects in 60 seconds, with hysteresis/cooldown.
+- WebSocket pushes events; metrics are sampled conservatively (initially no faster than one sample per 2 s while diagnostics are open) to avoid disturbing SCO/A2DP and the 1 GB system. Diagnostic collection cannot block the audio realtime path.
+
+### 25.4 Mobile WebUI and control API
+
+- Authenticated pages: Overview, Headsets/Intercom, Radio (ATS Mini and internet radio sources), Network (STA/AP), Hardware and Diagnostics, Settings. The WebUI is usable over wired LAN or Wi-Fi STA before AP coexistence is proven.
+- Core exposes versioned asynchronous, permission-checked control commands with operation IDs; snapshots/events are shared by WebUI, Android BLE gateway и LVGL через **единый** IPC-контракт. Фактическая схема и обязательные испытания дополнительно определены разделом 27.
+- API baseline: GET /api/v1/status; GET /api/v1/bt/devices; POST /api/v1/bt/scan; POST /api/v1/bt/pair; PUT /api/v1/bt/roles; GET /api/v1/wifi/networks; POST /api/v1/wifi/connect; GET /api/v1/radio/state; GET /api/v1/radio/presets; POST /api/v1/radio/tune; GET /api/v1/diagnostics/{system,processes,usb,bluetooth,network,events,health}; POST /api/v1/devices/rescan. These paths specify the target design, not existing handlers.
+- ATS Mini presets reside on Orange Pi even when the detachable receiver is missing. Saved desired presets and receiver-observed state are distinct; reconnecting must not blindly overwrite manual radio tuning.
+
+### 25.5 Acceptance tests
+
+1. Across at least five cold boots, previously distinguishable USB devices retain correct logical roles despite changed bus/device, ALSA, PipeWire or hci indices.
+2. Disconnect/reconnect each USB Bluetooth adapter and the USB audio input during operation; unrelated components stay functional, affected routes report DEGRADED then recover if hardware permits.
+3. Attach two identical adapters with missing/duplicate serials; ambiguous mapping never silently swaps headset roles. Confirmed physical port assignments survive repeated boots, and moves are flagged.
+4. Trigger at least five disconnects within 60 s; web reports FLAPPING, counters, last error and recoveries, without aggressive retry loops.
+5. Compare system diagnostics with actual /proc, sysfs, BlueZ and journal state; unsupported RSSI, battery, codec or sensor metrics show UNKNOWN.
+6. Verify authenticated WebUI and diagnostic-export sanitization. Check CPU/RSS of all services and no audio dropout attributable to diagnostic refresh.
+7. Verify ATS Mini analog input -> PipeWire -> one A2DP headset, then speech-file mix and smooth radio ducking; record BLE GATT control separately as unverified until tested.
+
+
+## 26. Изоляция отказов и независимые подсистемы (обязательное дополнение от 12.11.2026)
+
+**Требование P0:** сбой отдельной некритичной функции не должен завершать основной демон, уничтожать состояние других подсистем или разрывать исправный голосовой маршрут. Это требование конкретизирует раздел 13 и архитектуру процессов; само по себе описание модульной структуры не подтверждает её работоспособность.
+
+### 26.1. Границы изоляции
+
+- `medvetalkied`: координатор, желаемые режимы, настройки, IPC и основной HTTP API. Не выполняет блокирующий Bluetooth scan, USB polling, сетевой поиск или непосредственную обработку PCM в потоке управления.
+- `medvetalkie-bt`: отдельный процесс для BlueZ D-Bus, жизненного цикла контроллеров, гарнитур, pairing и bounded reconnect. Сбой discovery/scan обязан завершаться по тайм-ауту и отменяться без падения основного демона; операции поиска выполняются асинхронно. Если реальная библиотека поиска способна зависать или аварийно завершать общий BT-процесс, поисковый worker нужно выделить в самостоятельный перезапускаемый процесс.
+- Микширование и маршрутизация — штатные независимые процессы PipeWire/WirePlumber. Отдельный вспомогательный процесс для согласования аудиомаршрутов допускается только при необходимости изоляции; `medvetalkied` не содержит своего цикла PCM и не вызывает длительные аудиооперации синхронно. Сбой аудиооперации переводит затронутый маршрут в DEGRADED, не завершает основной демон. Перезапуск PipeWire может физически прервать звук; гарантировать непрерывность во время падения общего аудиосервера нельзя.
+- WebUI/CivetWeb: **самостоятельный `medvetalkie-web`** с ограниченными по времени обработчиками, собственными очередями и отдельными правами systemd; HTTP/WS служат транспортным адаптером к единому IPC и не содержат бизнес-логики. Аварийный выход веб-процесса не должен завершать `medvetalkied`, перезапускать BT или разрывать аудио. Текущий Web Alpha — только локальный диагностический `/api/v1/health`, он ещё не подключён к IPC и не является готовой панелью.
+- `medvetalkie-ui` (LVGL), ATS Mini radio-control, internet-radio, голосовые уведомления, игры и диагностический сборщик не имеют права останавливать интерком при собственном отказе. Потенциально ненадёжные сторонние библиотеки выполнять вне основного процесса, с лимитами ресурсов.
+- BlueZ и PipeWire являются общими внешними зависимостями нескольких каналов. Их аварийный рестарт не гарантирует бесшовности звука, но не должен обрушать остальные процессы MedveTalkie.
+
+### 26.2. Контракт восстановления и наблюдаемости
+
+- Управление процессами и рестартами — systemd с `Restart=on-failure`, ограничением частоты рестартов и журналированием причины завершения; не добавлять конкурирующий самописный watchdog.
+- IPC: версионирование, авторизация локальных клиентов, не блокирующие запросы, индивидуальные тайм-ауты и предел длины очередей. Обрыв сокета одного модуля не должен блокировать другие модули.
+- После рестарта модуль сначала заново обнаруживает фактическое состояние устройств/графа, затем безопасно сверяет его с желаемым; запрещено считать сохранённое состояние доказательством рабочего соединения.
+- Статусы по каждому модулю: READY, STARTING, DEGRADED, FAILED и RECOVERING; отдельные `last_error`, `restart_count`, время восстановления, число неудачных операций. Логи и WebUI должны различать падение процесса, ошибку операции и физическое исчезновение устройства.
+- При перегрузке или отказе некритичного модуля сохранять приоритет HFP-интеркома; ограничивать CPU/RAM/очереди ресурсоёмких диагностик, веб-запросов, сканирований и аудиовспомогательных задач.
+
+### 26.3. Приёмочные испытания fault injection
+
+1. Принудительно завершить отдельный BT discovery worker (если он выделен) или сорвать/затянуть scan: основной демон остаётся доступен, текущий аудиомаршрут не перезапускается без необходимости, сканирование ограничено тайм-аутом.
+2. Принудительно завершить `medvetalkie-bt`: `medvetalkied`, диагностика и WebUI остаются живы; после рестарта BT-служба восстанавливает наблюдаемое состояние и роли. Возможное прерывание активного HFP во время аварии BT-сервиса фиксируется отдельно.
+3. Убить `medvetalkie-ui` и отдельно спровоцировать ошибку radio-control: исправный интерком продолжает работать.
+4. Завершить helper аудиомаршрутизации (если реализован): основной демон продолжает работу; при падении `pipewire` фиксировать деградацию, восстановление графа и фактическое время прерывания звука.
+5. Создать блокирующий HTTP-запрос и множественные одновременные обращения, затем принудительно завершить отдельный `medvetalkie-web`: `medvetalkied`, Bluetooth и действующий аудиомаршрут продолжают работу; после рестарта веб-процесс получает новый snapshot, не воспроизводя старые команды.
+6. Проверить systemd crash-loop policy, отсутствие бесконечных агрессивных реконнектов, верхние пределы RSS/CPU и корректность событий в диагностическом архиве.
+
+**Критерий приёмки:** никакой тест отказа необязательного модуля не должен приводить к падению `medvetalkied`; допустимые кратковременные потери звука из-за общих зависимостей измеряются и документируются отдельно, а не скрываются под статусом READY.
+
+
+## 27. Единый API управления MedveTalkie (обязательное дополнение от 24.11.2026)
+
+**Дополнение (BlueZ D-Bus Alpha, 24.11.2026):** реализована пассивная
+интеграция с `org.bluez` через `GetManagedObjects` и локальный
+`bt.bluez` / `GET /api/v1/bt/bluez`. В API раздельно отображаются
+`Adapter1.Powered/Discovering` и `Device1.Paired/Connected`; по отсутствию
+свойств возвращается `null`, а по ошибке системного D-Bus или BlueZ —
+`NOT_READY`. **Connected/Paired не означают HFP_READY**: готовность
+SCO/eSCO и двустороннего звука не утверждается. Управляющих команд
+Bluetooth пока нет; чтение BlueZ должно быть проверено на реальных
+UGREEN ATS2851, а также испытано при перезапусках `bluetoothd`.
+Веб-панель пока только на loopback и без аутентификации, выпуск в LAN запрещён.
+
+
+
+**Дополнение к статусу на 24.11.2026 (BT Inventory / Display Runner Alpha):**
+реализован пассивный `bt.controllers` на основе Linux sysfs с сопоставлением
+HCI-контроллеров и физических USB-портов, включая одинаковые UGREEN ATS2851.
+В Web Alpha доступен `GET /api/v1/bt/controllers`. Поскольку получение
+сведений из sysfs не подтверждает состояние BlueZ и HFP, API явно возвращает
+`bluez_state=NOT_CHECKED`, `identity_verified=false` и
+`hfp_observed=NOT_CHECKED`; сопряжение и передача звука не выполняются.
+Создан отдельный C11 `medvetalkie-display-runner`, который читает сохранённые
+настройки через IPC, безопасно подготавливает аргументы уже проверенной
+заставки Бйорни и запускает её **только** после явного локального `--run`.
+По умолчанию используется `--dry-run`. Полноценный `systemd`-автозапуск,
+применение параметров «на лету», копирование скрипта из аппаратной ветки,
+проверка на Orange Pi и авторизованная доступная по LAN веб-панель **пока не
+выполнены**. Программная часть прошла 7/7 тестов CI (run 45474417800).
+
+
+
+**Статус реализации на 24.11.2026 (Core/Settings Alpha, проверено в CI):**
+в `feature/web-alpha-usb-diagnostics` реализованы C11 IPC v1, read-only
+`health`/`system.status`/`system.capabilities`, SQLite `user_version=1`
+для сохраняемых желаемых настроек, `settings.get`, `display.status` и
+локальный `settings.patch` с `expected_revision` и атомарной транзакцией.
+Запись требует отдельного `--allow-local-settings`; Web Alpha доступен
+только на `127.0.0.1:8765` и не позволяет изменять параметры через HTTP.
+Сохранённые настройки экрана **не применяются к работающему ST7789**;
+действительное управление гарнитурами/HFP, события, BLE Android,
+удалённая авторизованная веб-панель и аппаратная проверка этой сборки
+**ещё не выполнены**. Исходный план раздела ниже сохраняется в качестве
+критериев последующих этапов.
+
+
+**Решение:** единый контракт управления и наблюдения должен быть реализован **до** дальнейшего расширения WebUI, Android-приложения и LVGL-интерфейса. Бизнес-логика, права доступа, валидация, жизненный цикл операций и источник состояния находятся в `medvetalkied`; клиенты не управляют BlueZ, PipeWire, systemd или NetworkManager напрямую. Поскольку целевая ОС — Armbian / Debian 13, **`ubus` / `ubusd` / `libubox` не вводить** как обязательные зависимости. Системный D-Bus сохраняется для работы с BlueZ и другими системными компонентами, но не заменяет публичный контракт MedveTalkie.
+
+### 27.1. Схема процессов и транспортов
+
+| Компонент | Транспорт и назначение | Граница ответственности |
+|---|---|---|
+| `medvetalkied` | C11; AF_UNIX `SOCK_STREAM`, `/run/medvetalkie/control.sock` | Единственный core API, конфигурация, журнал операций, подписки, согласование желаемого и фактического состояния |
+| `medvetalkie-web` | C11/CivetWeb; HTTP REST + WebSocket, изолированный systemd-процесс | Авторизованный сетевой адаптер к core IPC; мобильная веб-панель, выдача событий; **не** исполняет произвольные shell-команды |
+| `medvetalkie-ble` (опциональный отдельный шлюз) | BlueZ D-Bus GATT server + локальный core IPC | Аутентифицированные короткие команды и статусы Android без сети, при аппаратном подтверждении BLE Peripheral |
+| `medvetalkie-ui` | Локальный IPC, SPI ST7789 / LVGL, GPIO-кнопки | Экран и физические органы управления; не хранит собственные правила маршрутизации |
+| `medvetalkie-bt` | Локальный IPC + BlueZ D-Bus | USB/HCI, сопряжение, роли гарнитур и фактические профили; не становится публичным API |
+| Аудиоподсистема | PipeWire / WirePlumber + отдельный модуль согласования маршрутов по необходимости | Непосредственный PCM не проходит через IPC, REST, WebSocket или BLE |
+
+`medvetalkie-web` — выделенный процесс с собственной учётной записью/правами, перезапускаемый независимо. Bluetooth GATT нельзя размещать в потоке обработки HFP/SCO или связывать его обслуживание с частотой SPI-отрисовки. Внешние адаптеры лишь переводят запросы в команды **того же** внутреннего API и транслируют итоговые события. Запрещены отдельные конкурирующие модели настроек для WebUI, Android и дисплея.
+
+### 27.2. Локальный протокол IPC v1
+
+- Обязательные поля сообщения: `v: 1`, `type` и корреляционный `id` для команды. Кадр: 4 байта длины в сетевом порядке + UTF-8 JSON; максимум 65 536 байт на кадр, превышение и некорректный JSON отклонять до обработки. Неизвестную основную версию протокола отклонять с явной ошибкой.
+- Запрос изменения: `{ "v":1, "type":"command", "id":"req-102", "action":"display.configure", "args":{"spi_mhz":4,"fps":25} }`. Ответ `accepted` означает только постановку в очередь и содержит `operation`; отдельный `result` означает фактическое завершение или ошибку.
+- Состояние: версионированные `snapshot` с монотонным `revision` и `desired`/`observed`/`effective` для соответствующих подсистем. Подписка: начальный snapshot, затем события с `seq`; при пропуске последовательности и после реконнекта клиент повторно получает полный snapshot.
+- Все изменения асинхронны, имеют ограниченный тайм-аут, `operation_id`, машинный `error.code`, безопасное текстовое описание и запись аудита без секретов. При конфликтующих переходах — сериализация по контроллеру/аудиомаршруту; повтор `id` в установленном окне не должен дублировать физическое действие. Семантика отмены и восстановления после падения процесса документируется для каждой долгой операции.
+- Использовать Unix socket с ограниченными правами и `SO_PEERCRED`; разрешения назначать **по идентичности процесса и команде**, а не только по факту подключения. Удалённый клиент не получает автоматически полномочия root через шлюз. Ограничить частоту команд, размер очередей, число подписок и диагностическую нагрузку.
+- Версионировать поля и возвращать обнаруженные `capabilities`; неизвестные необязательные поля игнорировать безопасно, отсутствующие возможности отображать как `NOT_SUPPORTED`, неготовность — `NOT_READY`. Не имитировать успешные сопряжения, HFP, BLE-рекламу, FM или радио.
+
+### 27.3. Канонические доменные команды v1
+
+| Область | Методы core API | Уточнение |
+|---|---|---|
+| Система | `system.health`, `system.status`, `system.capabilities` | Версии, служебное здоровье, известное/неизвестное состояние |
+| Bluetooth | `bt.controllers`, `bt.scan`, `bt.pair`, `bt.unpair` | Физическая идентичность, bounded scan и явное подтверждение pairing |
+| Гарнитуры | `headset.assign`, `headset.connect`, `headset.disconnect`, `headset.status` | Не привязывать роли к временным `hciN`/USB bus/devnum |
+| Аудио | `audio.status`, `audio.volume.set`, `audio.routes` | Проверка фактических источников/выходов HFP и состояния маршрута |
+| Режимы | `mode.get`, `mode.set` | Предупреждение о выключении микрофона HFP при A2DP |
+| Дисплей | `display.status`, `display.configure`, `display.screensaver` | Включение заставки; `spi_mhz`, `fps` с диапазонами и валидацией |
+| Сеть | `network.status`, `network.configure` | Профили интерфейсов, смена IP с подтверждением и откатом |
+| Настройки | `settings.get`, `settings.patch` | SQLite, версия схемы, атомарная запись и миграции |
+| Диагностика | `diagnostics.snapshot`, `diagnostics.export` | Ограниченные журналы, удаление ключей и персональных идентификаторов |
+| События/операции | `events.subscribe`, `operation.status`, `operation.cancel` (при поддержке операции) | Состояние long-running задач, переподключения и recoveries |
+
+HTTP REST `/api/v1/*` и `/api/v1/events` (WebSocket) — только внешнее отображение этих методов, не второй бизнес-API. Имеющийся `GET /api/v1/health` в Web Alpha — изолированный диагностический прототип на `127.0.0.1:8765`, **пока без подключения к core**. Экспорт диагностических архивов и крупные файлы доступны через аутентифицированный HTTP, но не обязаны поддерживаться через BLE. Параметры часов/заставки не должны предоставлять произвольный доступ к `date --set`, исполнению программ или файлам системы.
+
+### 27.4. Android и Bluetooth без Wi-Fi
+
+- Android-клиент — Kotlin, использует те же доменные команды, что WebUI. Для безсетевого режима **предпочтителен BLE GATT**, но только после проверки на реальном оборудовании `SupportedSettings`, LE Peripheral/Advertising, фактической публикации сервиса и стабильности соединения.
+- Проверенные в стенде USB-адаптеры UGREEN CM390 / Actions ATS2851 (`10d7:b012`) пока подтверждены лишь как **два обнаруженных контроллера BlueZ**. Это **не** доказательство BLE Peripheral/GATT server, одновременной рекламы и HFP/SCO или достаточной пропускной способности. Отдельный USB BLE-контроллер допустим, если два ATS2851 заняты гарнитурами или возникает RF/USB-конфликт.
+- Сервис GATT предоставляет версию, capabilities, канал коротких команд, результат операций и уведомления о состоянии. Для маленького BLE MTU проектировать отдельное фрагментирование, ограничение размеров, порядковые номера, защиту от повтора, тайм-ауты и восстановление подписки; **не** отправлять напрямую IPC-кадр до 64 КиБ одной GATT-характеристикой.
+- Только подтверждённое владельцем сопряжение и прикладная авторизация с ограниченными правами; шифрование линка и bonding сами по себе не заменяют авторизацию команд. Защита от повторных команд, лимиты попыток и невозможность неавторизованно включить pairing, изменить сеть или перехватить аудио обязательны.
+- BLE gateway — опциональный адаптер, а не зависимость запуска ядра, WebUI, двух HFP-гарнитур или заставки. Отключённый/неподдерживаемый BLE отображается как `NOT_SUPPORTED` или `DISABLED`; не изображать Android-приложение работающим до аппаратного теста.
+
+### 27.5. Сеть, актуальная аппаратная конфигурация и доступ
+
+- На стенде 24.11.2026 подтверждены загрузка Armbian на Orange Pi Zero 3, SPI1/ST7789 и анимация Бйорни при 4 МГц/24,3–25 FPS, а также обнаружение двух USB UGREEN через BlueZ. Эти факты не подтверждают HFP full-duplex и не означают завершения WebUI.
+- После отключения встроенного AW859A/UWE5622 рассматривать **USB-BT + Ethernet** как основной стабильный аппаратный профиль до дополнительных тестов. Сохранить экспериментальные Wi-Fi-патчи и результаты отдельно; не делать автозагрузку встроенных модулей обязательной для core API. Сведения о прекращении зависаний требуют отдельного продолжительного подтверждения.
+- Веб-панель должна работать при отключённом встроенном WLAN через Ethernet, позднее через поддерживаемый USB Wi-Fi. Не считать ранее заданную AP `MedveTalkie` доступной при заблокированном `sprdwl_ng`. Отображать фактические IP, а не выдуманную доступность `wlan0`.
+- Сохранять испытательный адрес Ethernet `192.168.11.1/24` как задокументированное значение текущего образа, но не жестко кодировать его в API или Android-клиенте. При смене сетевых параметров предусмотреть подтверждение доступности нового адреса и автоматический откат при потере связи. Не открывать локальный диагностический порт без аутентификации.
+- Приоритет HFP/интеркома выше фонового BLE, Wi-Fi, HTTP, диагностики и дисплея. Применение настроек не должно перезапускать весь Bluetooth-стек или оба контроллера, если затронута лишь одна роль.
+
+### 27.6. Безопасность и хранение
+
+- WebUI: логин владельца, защищённая сессия, CSRF для изменяющих HTTP-запросов, строгая валидация, ограничения попыток входа, авторизация каждого метода, защита WebSocket и явное управление сроком действия сессии. При доступе через недоверенную сеть требуется защищённый транспорт; не считать общедоступный HTTP безопасным.
+- IPC: разрешения Unix-сокетов, `SO_PEERCRED` и минимальные полномочия отдельных systemd unit; локальный веб-процесс не запускается от root без доказанной необходимости. Периферийные ошибки и ошибки запросов изолированы от `medvetalkied`.
+- Секреты не дублировать в дампах, событиях и общих JSON-состояниях. BlueZ остаётся владельцем ключей сопряжения, сетевой менеджер — учётных данных Wi-Fi. SQLite хранит собственные настройки MedveTalkie и миграции.
+- Для первичного доверенного подключения использовать локальное физическое подтверждение либо одноразовый код, отображаемый по явному действию; никакого общего заводского пароля администрирования. Ограничить опасные настройки и pairing во время движения.
+
+### 27.7. Минимальные этапы реализации и приёмка
+
+1. **API Core Alpha (P0).** Реализовать C11 IPC-фрейминг, парсер/валидацию, `SO_PEERCRED`, версии и capabilities, `snapshot/events`, accepted/result, тайм-ауты, идемпотентность, журнал операций и SQLite миграции. Тесты на malformed/oversize, права доступа, конкурентность и восстановление.
+2. **Фактические устройства (P0).** Подключить read-only USB/BlueZ/system/network/display telemetry и правильные identity mapping UGREEN. Не выдавать обнаружение HCI за HFP_READY. Включить управление уже проверенной заставкой с безопасными границами параметров.
+3. **Web Alpha (P1).** Интегрировать существующую ветку `feature/web-alpha-usb-diagnostics`, выделенный `medvetalkie-web` и её `/health` с новым IPC; добавить реальную страницу статусов и авторизованные настройки по Ethernet. WebUI не обязан ждать готового full-duplex HFP.
+4. **Bluetooth/HFP (P1).** Реализовать реальные асинхронные BT операции, одну двустороннюю HFP-сессию, затем две. Подтвердить источники и приёмники аудио, протоколировать деградацию; в интерфейсе не показывать ложный статус успеха.
+5. **Android BLE (P1 только при hardware GO).** Испытать GATT Peripheral/Advertising на ATS2851 и совместимость с двумя HFP; после подтверждения внедрить отдельный BLE gateway и Kotlin-клиент. При неудаче сохранить рабочий HTTP/WebUI и предусмотреть независимый BLE-адаптер.
+6. **Fault injection (обязательный gate).** Перезапуск/авария WebUI, BLE gateway, SPI UI и диагностического сборщика не убивает core и не сбрасывает уже работающий HFP. После переподключения клиент получает новый snapshot, а не повторяет опасные команды. Испытать повтор команд, потерю ответа, конфликт настроек и сетевой откат.
+7. **Ресурсные границы (обязательный gate).** На Orange Pi Zero 3 1 ГБ измерять CPU/RSS всех процессов, задержку IPC и влияние нагрузки HTTP/BLE на звук и SPI. До реальных измерений не заявлять гарантии производительности.
+
+**Критерий готовности API v1:** WebUI, локальный экран и (после hardware GO) Android отправляют команды через один контракт и получают один наблюдаемый state/event stream; все обязательные тесты версионирования, прав доступа, восстановления, отсутствия ложного HFP_READY и изоляции отказов проходят. Не путать готовность архитектуры API с готовностью двухсторонней связи на реальном оборудовании.
+
+
+## 28. Обязательная комплектация следующего образа Armbian: Bluetooth HFP и headless-аудио (25.11.2026)
+
+**Статус требования: P0, обязательно для следующей полной сборки образа Orange Pi Zero 3.** Это требование к будущему образу, не утверждение о готовности существующего IMG.
+
+### 28.1. Состав rootfs
+
+Следующая сборка должна включать штатные пакеты Debian 13 ARM64: `bluez`, `pipewire`, `pipewire-pulse`, `wireplumber`, `libspa-0.2-bluetooth`, `pulseaudio-utils` и диагностические средства `bluetoothctl`, `btmgmt`, `btmon`, `lsusb`, `pactl`, `wpctl`, `pw-cli` (соответствующие пакеты/зависимости определить по индексам выбранного дистрибутива). Сборочный рецепт должен проверять наличие исполняемых файлов и SPA Bluetooth-плагина, не только успешность установки пакетов. Версии и происхождение пакетов фиксировать в манифесте образа. Использовать только проверенные подписанные репозитории: ошибки времени, ключей и подписей APT должны останавливать сборку, а не обходиться `--allow-unauthenticated` или отключением проверки.
+
+### 28.2. Запуск без графического окружения
+
+Создать/использовать непривилегированную учётную запись `medvetalkie` и обеспечить после загрузки systemd user manager, `XDG_RUNTIME_DIR`, пользовательский D-Bus, активные `pipewire.socket`, `pipewire-pulse.socket`, `wireplumber.service` и доступный Pulse-совместимый socket. Предусмотреть `loginctl enable-linger medvetalkie` либо эквивалентное декларативное управление через образ; никакой зависимости от интерактивного входа, HDMI или desktop-сеанса. Проверить порядок запуска, разграничение прав и restart/reboot. Не фиксировать UID 1000: определять UID динамически. Не запускать аудиосессию от root.
+
+### 28.3. Bluetooth HFP и контроллеры
+
+Сохранять штатный BlueZ и два независимых UGREEN CM390 / ATS2851 `10d7:b012` на USB, не включать автоматически экспериментальный AW859A/UWE5622. Стабильная идентичность контроллера определяется по проверенным признакам, а не только `hci0/hci1`; при отсутствии `/sys/class/bluetooth/hci*/address` сверять D-Bus Adapter1 и USB-топологию. Настроить WirePlumber/PipeWire Bluetooth backend для HFP/HSP Audio Gateway и последующей проверки SCO/eSCO; конкретные свойства и совместимость версий подтвердить на образе перед окончательной фиксацией конфигурации. Наличие адаптеров, соединения ACL, профиля HFP либо аудиоузлов НЕ означает подтверждённый двусторонний звук. Не изменять существующие Bluetooth-сопряжения без согласия.
+
+### 28.4. Обязательные проверки и критерий готовности
+
+- **Build gate:** в итоговом rootfs присутствуют пакеты, библиотеки и CLI; проверены корректные systemd user units и manifest; ни одна ошибка package-install не скрывается.
+- **Boot gate:** на физической OPiZ3 после холодного запуска доступны BlueZ и обе USB-карты, user-сессия `medvetalkie`, PipeWire/WirePlumber, Pulse-сокет и запрос `pactl info` от правильного пользователя; после reboot результат воспроизводится без логина.
+- **Hardware audio gate (отдельно):** AIRIDE N1 сопряжена явно, выбран HFP, SCO/eSCO наблюдается, проверены реальные микрофон и динамик; затем две гарнитуры и одновременная перекрёстная полнодуплексная передача. До этого статус `HFP_NOT_VERIFIED`, релиз не объявлять функционально завершённым.
+- **Regression gate:** ST7789/Bjorni, единственный SPI/GPIO owner, Core IPC/Web, wired Ethernet, текущее отключение проблемных встроенных радиомодулей, rollback и безопасность APT не должны регрессировать.
+
+Требование относится также к сценариям повторной установки/восстановления и к документации образа. CI-проверка наличия файлов в rootfs не заменяет физический тест SCO/PCM.
