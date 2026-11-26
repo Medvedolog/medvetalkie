@@ -5,6 +5,8 @@ Original screensaver.c and the existing launcher are never modified.
 The generated C retains one SPI/GPIO owner, Bjorni, strict freshness and faults.
 """
 import argparse
+import base64
+import zlib
 from pathlib import Path
 
 HERE=Path(__file__).resolve().parent
@@ -63,7 +65,36 @@ def enhance(source):
  {'%',{17,18,2,4,8,9,17}}, {'+',{0,4,4,31,4,4,0}}""")
     first=source.index('static void status_row(')
     last=source.index('\nstatic unsigned read_le(',first)
-    return source[:first]+V2_SCREEN+source[last:]
+    screen=V2_SCREEN.replace("/* BEAR_PIXEL_RESOURCE */", bear_pixel_resource())
+    return source[:first]+screen+source[last:]
+
+
+def bear_pixel_resource():
+    """Decode the user-supplied pixel-art head (with added blue earcups) at build time.
+
+    The renderer itself contains static RGB565 pixels only; no runtime PNG,
+    decompression, filesystem reads or image decoding on the Orange Pi.
+    """
+    encoded=(HERE / "medvetalkie-headphones.rgb565.z.b64").read_text().strip()
+    blob=zlib.decompress(base64.b64decode(encoded,validate=True))
+    width,height=88,72
+    if len(blob)!=width*height*3:
+        raise ValueError("Wrong size for MedveTalkie headphone bear sprite")
+    colors=[]
+    mask=[]
+    for i in range(0,len(blob),3):
+        colors.append(blob[i]|(blob[i+1]<<8))
+        mask.append(blob[i+2])
+    if any(v not in (0,1) for v in mask):
+        raise ValueError("Invalid bear transparency mask")
+    chunks=lambda entries: "\\n".join(
+        "    "+",".join(str(v) for v in entries[i:i+22])+","
+        for i in range(0,len(entries),22))
+    return (f"/* Reference-derived bear head, {width}x{height}, RGB565; generated from versioned asset. */\\n"
+            f"static const uint16_t bear_rgb565[{width*height}]={{\\n"+chunks(colors)+
+            "\\n};\\n"
+            f"static const uint8_t bear_alpha[{width*height}]={{\\n"+chunks(mask)+
+            "\\n};\\n")
 
 V2_SCREEN=r'''/* Four approved 320x240 layouts. No button control, read-only status. */
 static uint16_t state_colour(const char *s)
@@ -81,57 +112,21 @@ static void bar_v2(int x,int y,int w,int pct,uint16_t c)
 /* Native RGB565 smiling bear in over-ear headphones (no emoji or image loader).
  * Headphones wrap around the two round ears, not merely sit next to the head.
  */
-/* Compact hand-drawn RGB565 bear: genuinely smiles and wears headphones. */
+/* BEAR_PIXEL_RESOURCE */
+/* Source-derived brown smiling face with actual blue over-ear headphones. */
 static void happy_bear(int x,int y,int k,uint16_t cup)
 {
-    uint16_t shadow=rgb(83,47,32),fur=rgb(177,113,63);
-    uint16_t light=rgb(202,140,83),inner=rgb(215,148,108);
-    uint16_t muzzle=rgb(246,204,151),nose=rgb(53,36,31);
-    uint16_t blue_dark=rgb(19,79,143),cushion=rgb(142,226,250);
-    uint16_t shine=rgb(255,242,220);
-    /* ears remain visible under the curved headband */
-    disc(x-15*k,y-13*k,8*k,shadow);
-    disc(x+15*k,y-13*k,8*k,shadow);
-    disc(x-15*k,y-13*k,5*k,inner);
-    disc(x+15*k,y-13*k,5*k,inner);
-    disc(x,y+1*k,21*k,shadow);
-    disc(x,y,20*k,fur);
-    disc(x-6*k,y-5*k,10*k,light);
-    disc(x+8*k,y-5*k,8*k,light);
-    /* padded curved headband */
-    for(int t=0;t<4*k;t++) {
-        line(x-21*k+t,y-10*k,x-21*k+t,y-18*k,cup);
-        line(x-21*k+t,y-18*k,x-12*k,y-25*k+t,cup);
-        line(x-12*k,y-25*k+t,x+12*k,y-25*k+t,cup);
-        line(x+12*k,y-25*k+t,x+21*k-t,y-18*k,cup);
-        line(x+21*k-t,y-18*k,x+21*k-t,y-10*k,cup);
+    const int w=(k<=1)?62:108, h=(k<=1)?51:88;
+    const int left=x-w/2, top=y-h/2;
+    (void)cup; /* The headset colours are part of the approved pixel sprite. */
+    for(int dy=0;dy<h;dy++){
+        int sy=dy*72/h;
+        for(int dx=0;dx<w;dx++){
+            int sx=dx*88/w;
+            unsigned index=(unsigned)(sy*88+sx);
+            if(bear_alpha[index])dot(left+dx,top+dy,bear_rgb565[index]);
+        }
     }
-    /* true over-ear earcups, thick rim and soft inner pad */
-    disc(x-20*k,y+1*k,9*k,blue_dark);
-    disc(x+20*k,y+1*k,9*k,blue_dark);
-    rect(x-27*k,y-7*k,13*k,16*k,blue_dark);
-    rect(x+14*k,y-7*k,13*k,16*k,blue_dark);
-    disc(x-20*k,y+1*k,6*k,cup);
-    disc(x+20*k,y+1*k,6*k,cup);
-    rect(x-25*k,y-6*k,10*k,14*k,cup);
-    rect(x+15*k,y-6*k,10*k,14*k,cup);
-    rect(x-17*k,y-4*k,2*k,11*k,cushion);
-    rect(x+15*k,y-4*k,2*k,11*k,cushion);
-    /* happy, slightly squinting eyes and smiling muzzle */
-    disc(x-7*k,y-2*k,2*k,nose);
-    disc(x+7*k,y-2*k,2*k,nose);
-    dot(x-8*k,y-3*k,shine);
-    dot(x+6*k,y-3*k,shine);
-    disc(x,y+10*k,10*k,muzzle);
-    disc(x,y+6*k,3*k,nose);
-    line(x,y+9*k,x,y+13*k,nose);
-    line(x-7*k,y+11*k,x-5*k,y+15*k,nose);
-    line(x-5*k,y+15*k,x-2*k,y+17*k,nose);
-    line(x-2*k,y+17*k,x+2*k,y+17*k,nose);
-    line(x+2*k,y+17*k,x+5*k,y+15*k,nose);
-    line(x+5*k,y+15*k,x+7*k,y+11*k,nose);
-    disc(x-12*k,y+10*k,3*k,rgb(220,122,105));
-    disc(x+12*k,y+10*k,3*k,rgb(220,122,105));
 }
 static void topbar_v2(time_t wall,const char *mode)
 {
@@ -155,7 +150,7 @@ static void card_v2(int x,const char *name,const char *state,const char *profile
     text(x+10,47,name,2,white);
     disc(x+132,54,5,c);
     /* Face occupies its own row; labels must never cross the headphones. */
-    happy_bear(x+74,112,2,rgb(43,164,246));
+    happy_bear(x+74,105,2,rgb(43,164,246));
     text(x+10,151,profile,1,c);
     if(battery>=0)snprintf(buf,sizeof(buf),"%d%%",battery);
     else strcpy(buf,"--");
