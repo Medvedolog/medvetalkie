@@ -87,14 +87,14 @@ def bear_pixel_resource():
         mask.append(blob[i+2])
     if any(v not in (0,1) for v in mask):
         raise ValueError("Invalid bear transparency mask")
-    chunks=lambda entries: "\\n".join(
+    chunks=lambda entries: "\n".join(
         "    "+",".join(str(v) for v in entries[i:i+22])+","
         for i in range(0,len(entries),22))
-    return (f"/* Reference-derived bear head, {width}x{height}, RGB565; generated from versioned asset. */\\n"
-            f"static const uint16_t bear_rgb565[{width*height}]={{\\n"+chunks(colors)+
-            "\\n};\\n"
-            f"static const uint8_t bear_alpha[{width*height}]={{\\n"+chunks(mask)+
-            "\\n};\\n")
+    return (f"/* Reference-derived bear head, {width}x{height}, RGB565; generated from versioned asset. */\n"
+            f"static const uint16_t bear_rgb565[{width*height}]={{\n"+chunks(colors)+
+            "\n};\n"
+            f"static const uint8_t bear_alpha[{width*height}]={{\n"+chunks(mask)+
+            "\n};\n")
 
 V2_SCREEN=r'''/* Four approved 320x240 layouts. No button control, read-only status. */
 static uint16_t state_colour(const char *s)
