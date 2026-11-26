@@ -81,33 +81,57 @@ static void bar_v2(int x,int y,int w,int pct,uint16_t c)
 /* Native RGB565 smiling bear in over-ear headphones (no emoji or image loader).
  * Headphones wrap around the two round ears, not merely sit next to the head.
  */
+/* Compact hand-drawn RGB565 bear: genuinely smiles and wears headphones. */
 static void happy_bear(int x,int y,int k,uint16_t cup)
 {
-    uint16_t fur=rgb(165,106,55),ear=rgb(131,76,41),muzzle=rgb(234,191,141);
-    uint16_t black=rgb(32,31,38),white=rgb(250,238,216);
-    disc(x-13*k,y-11*k,7*k,ear);disc(x+13*k,y-11*k,7*k,ear);
-    disc(x-13*k,y-11*k,4*k,muzzle);disc(x+13*k,y-11*k,4*k,muzzle);
-    disc(x,y,19*k,fur);
-    /* blue padded headband arches above the brown bear */
-    for(int z=0;z<3*k;++z) {
-        line(x-18*k+z,y-8*k,x-18*k+z,y-17*k,cup);
-        line(x-18*k+z,y-17*k,x-11*k,y-23*k+z,cup);
-        line(x-11*k,y-23*k+z,x+11*k,y-23*k+z,cup);
-        line(x+11*k,y-23*k+z,x+18*k-z,y-17*k,cup);
-        line(x+18*k-z,y-17*k,x+18*k-z,y-8*k,cup);
+    uint16_t shadow=rgb(83,47,32),fur=rgb(177,113,63);
+    uint16_t light=rgb(202,140,83),inner=rgb(215,148,108);
+    uint16_t muzzle=rgb(246,204,151),nose=rgb(53,36,31);
+    uint16_t blue_dark=rgb(19,79,143),cushion=rgb(142,226,250);
+    uint16_t shine=rgb(255,242,220);
+    /* ears remain visible under the curved headband */
+    disc(x-15*k,y-13*k,8*k,shadow);
+    disc(x+15*k,y-13*k,8*k,shadow);
+    disc(x-15*k,y-13*k,5*k,inner);
+    disc(x+15*k,y-13*k,5*k,inner);
+    disc(x,y+1*k,21*k,shadow);
+    disc(x,y,20*k,fur);
+    disc(x-6*k,y-5*k,10*k,light);
+    disc(x+8*k,y-5*k,8*k,light);
+    /* padded curved headband */
+    for(int t=0;t<4*k;t++) {
+        line(x-21*k+t,y-10*k,x-21*k+t,y-18*k,cup);
+        line(x-21*k+t,y-18*k,x-12*k,y-25*k+t,cup);
+        line(x-12*k,y-25*k+t,x+12*k,y-25*k+t,cup);
+        line(x+12*k,y-25*k+t,x+21*k-t,y-18*k,cup);
+        line(x+21*k-t,y-18*k,x+21*k-t,y-10*k,cup);
     }
-    rect(x-21*k,y-8*k,7*k,17*k,cup);
-    rect(x+14*k,y-8*k,7*k,17*k,cup);
-    rect(x-17*k,y-6*k,3*k,13*k,rgb(190,220,241));
-    rect(x+14*k,y-6*k,3*k,13*k,rgb(190,220,241));
-    disc(x-7*k,y-2*k,2*k,black);disc(x+7*k,y-2*k,2*k,black);
-    disc(x,y+8*k,9*k,muzzle);disc(x,y+5*k,3*k,black);
-    line(x,y+8*k,x,y+11*k,black);
-    line(x-6*k,y+10*k,x-3*k,y+13*k,black);
-    line(x-3*k,y+13*k,x,y+14*k,black);
-    line(x,y+14*k,x+3*k,y+13*k,black);
-    line(x+3*k,y+13*k,x+6*k,y+10*k,black);
-    dot(x-7*k,y-3*k,white);dot(x+7*k,y-3*k,white);
+    /* true over-ear earcups, thick rim and soft inner pad */
+    disc(x-20*k,y+1*k,9*k,blue_dark);
+    disc(x+20*k,y+1*k,9*k,blue_dark);
+    rect(x-27*k,y-7*k,13*k,16*k,blue_dark);
+    rect(x+14*k,y-7*k,13*k,16*k,blue_dark);
+    disc(x-20*k,y+1*k,6*k,cup);
+    disc(x+20*k,y+1*k,6*k,cup);
+    rect(x-25*k,y-6*k,10*k,14*k,cup);
+    rect(x+15*k,y-6*k,10*k,14*k,cup);
+    rect(x-17*k,y-4*k,2*k,11*k,cushion);
+    rect(x+15*k,y-4*k,2*k,11*k,cushion);
+    /* happy, slightly squinting eyes and smiling muzzle */
+    disc(x-7*k,y-2*k,2*k,nose);
+    disc(x+7*k,y-2*k,2*k,nose);
+    dot(x-8*k,y-3*k,shine);
+    dot(x+6*k,y-3*k,shine);
+    disc(x,y+10*k,10*k,muzzle);
+    disc(x,y+6*k,3*k,nose);
+    line(x,y+9*k,x,y+13*k,nose);
+    line(x-7*k,y+11*k,x-5*k,y+15*k,nose);
+    line(x-5*k,y+15*k,x-2*k,y+17*k,nose);
+    line(x-2*k,y+17*k,x+2*k,y+17*k,nose);
+    line(x+2*k,y+17*k,x+5*k,y+15*k,nose);
+    line(x+5*k,y+15*k,x+7*k,y+11*k,nose);
+    disc(x-12*k,y+10*k,3*k,rgb(220,122,105));
+    disc(x+12*k,y+10*k,3*k,rgb(220,122,105));
 }
 static void topbar_v2(time_t wall,const char *mode)
 {
@@ -124,31 +148,33 @@ static void topbar_v2(time_t wall,const char *mode)
 static void card_v2(int x,const char *name,const char *state,const char *profile,
                     int battery,int rssi,int volume,uint16_t base)
 {
-    uint16_t white=rgb(234,243,253),dim=rgb(156,181,203),c=state_colour(state);
+    uint16_t white=rgb(238,246,255),dim=rgb(162,188,209),c=state_colour(state);
+    char buf[30];
     rect(x,39,149,149,base);
-    rect(x,39,149,2,c);
-    text(x+11,47,name,2,white);
-    happy_bear(x+42,105,1,rgb(44,164,238));
-    disc(x+81,76,4,c);
-    text(x+91,73,profile,1,c);
-    /* show physical ACL status separately from audio profile */
-    if(!strcmp(state,"DISCONNECTED"))text(x+76,90,"OFFLINE",1,c);
-    else if(!strcmp(state,"UNASSIGNED"))text(x+76,90,"UNKNOWN",1,c);
-    else if(!strcmp(state,"HFP_READY"))text(x+76,90,"VOICE",1,c);
-    else text(x+76,90,"LINK",1,c);
-    char buf[26];
+    rect(x,39,149,3,c);
+    text(x+10,48,name,2,white);
+    /* Much larger bear, with no text or overlay covering its face. */
+    happy_bear(x+49,106,2,rgb(43,164,246));
+    disc(x+121,76,5,c);
+    text(x+92,85,profile,1,c);
+    if(!strcmp(state,"DISCONNECTED"))text(x+91,101,"OFF",1,c);
+    else if(!strcmp(state,"UNASSIGNED"))text(x+91,101,"--",1,c);
+    else if(!strcmp(state,"HFP_READY"))text(x+91,101,"VOICE",1,c);
+    else text(x+91,101,"LINK",1,c);
+    /* Battery and RSSI only from actual telemetry. */
     if(battery>=0)snprintf(buf,sizeof(buf),"%d%%",battery);
     else strcpy(buf,"--");
-    text(x+79,107,buf,1,white);
-    bar_v2(x+79,118,59,battery,battery>=0&&battery<20?rgb(239,76,77):rgb(52,223,124));
-    if(rssi!=-128)snprintf(buf,sizeof(buf),"%d DBM",rssi);
+    text(x+95,119,buf,1,white);
+    bar_v2(x+94,130,45,battery,battery>=0&&battery<20?rgb(239,76,77):rgb(52,223,124));
+    if(rssi!=-128)snprintf(buf,sizeof(buf),"%d",rssi);
     else strcpy(buf,"--");
-    text(x+11,135,buf,1,dim);
+    text(x+12,151,buf,1,white);
+    text(x+46,151,"DBM",1,dim);
     if(volume>=0)snprintf(buf,sizeof(buf),"%d%%",volume);
     else strcpy(buf,"--");
-    text(x+102,135,buf,1,white);
-    bar_v2(x+11,153,127,volume,rgb(40,194,237));
-    ru_text(x+11,165,"ГРОМКОСТЬ",1,dim);
+    text(x+105,151,buf,1,white);
+    bar_v2(x+12,167,125,volume,rgb(39,194,246));
+    ru_text(x+12,178,"ГРОМКОСТЬ",1,dim);
 }
 static void bottom_v2(const display_status *s)
 {
@@ -176,7 +202,7 @@ static void render_radio_v2(time_t wall,const display_status *s)
 {
     memset(pixels,0,sizeof(pixels));topbar_v2(wall,s->mode);
     rect(8,40,304,147,rgb(10,45,72));
-    happy_bear(72,112,2,rgb(39,174,248));
+    happy_bear(79,110,2,rgb(39,174,248));
     ru_text(135,66,"РАДИО",2,rgb(242,247,251));
     text(135,106,s->radio,1,rgb(57,224,138));
     ru_text(135,137,"ЧАСТОТА",1,rgb(153,184,204));
