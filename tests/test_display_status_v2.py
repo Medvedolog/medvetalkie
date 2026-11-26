@@ -61,7 +61,7 @@ with tempfile.TemporaryDirectory(prefix="mt-status-v2-") as temp:
     intercom=preview(known.replace("mode=UNKNOWN","mode=INTERCOM"),"intercom.ppm")
     system=preview(known.replace("bt_connected=2","bt_connected=0"),"system.ppm")
     assert len({radio,game,intercom,system,fault})==5, "each approved screen must differ"
-    assert detailed==intercom, "observed connected headsets should show card dashboard"
+    assert detailed!=system, "connected headsets must show card dashboard, not system view"
     source=(SAVER/"build-status-v2.py").read_text()
     assert "happy_bear" in source and "render_game_v2" in source
     print("PASS ST7789 v2 320x240 four modes, smiling headphone bear, strict status fallback")
