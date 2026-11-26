@@ -58,6 +58,9 @@ def enhance(source):
         if(strlen(sep)>=24 ||
            (is_profile ? (strcmp(sep,"HFP") && strcmp(sep,"A2DP") && strcmp(sep,"UNKNOWN"))
                        : !status_token(sep))){fclose(file);return 0;}''')
+    # The original bitmap font lacks percent and plus symbols used by metrics.
+    source=exactly(source," {'/',{1,2,2,4,8,8,16}}", """ {'/',{1,2,2,4,8,8,16}},
+ {'%',{17,18,2,4,8,9,17}}, {'+',{0,4,4,31,4,4,0}}""")
     first=source.index('static void status_row(')
     last=source.index('\nstatic unsigned read_le(',first)
     return source[:first]+V2_SCREEN+source[last:]
@@ -138,7 +141,7 @@ static void card_v2(int x,const char *name,const char *state,const char *profile
     else strcpy(buf,"--");
     text(x+79,107,buf,1,white);
     bar_v2(x+79,118,59,battery,battery>=0&&battery<20?rgb(239,76,77):rgb(52,223,124));
-    if(rssi!=-128)snprintf(buf,sizeof(buf),"%d dBm",rssi);
+    if(rssi!=-128)snprintf(buf,sizeof(buf),"%d DBM",rssi);
     else strcpy(buf,"--");
     text(x+11,135,buf,1,dim);
     if(volume>=0)snprintf(buf,sizeof(buf),"%d%%",volume);
