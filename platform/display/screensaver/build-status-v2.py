@@ -155,7 +155,7 @@ static void card_v2(int x,const char *name,const char *state,const char *profile
     text(x+10,47,name,2,white);
     disc(x+132,54,5,c);
     /* Face occupies its own row; labels must never cross the headphones. */
-    happy_bear(x+74,110,2,rgb(43,164,246));
+    happy_bear(x+74,112,2,rgb(43,164,246));
     text(x+10,151,profile,1,c);
     if(battery>=0)snprintf(buf,sizeof(buf),"%d%%",battery);
     else strcpy(buf,"--");
