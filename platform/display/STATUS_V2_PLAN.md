@@ -70,3 +70,18 @@ Ctrl+C stops the explicitly started processes and leaves the normal display serv
 ## Outstanding before section 9 is complete
 
 The reader of actual authoritative modes still needs connection to Core (this standalone observer shows UNKNOWN rather than inventing active INTERCOM). Audio status remains NOT_VERIFIED until active PCM transport is observed. Internet connectivity (rather than IP-link), radio frequency/RDS, active ROM/game metadata, power-bank/supply battery, low-power alerts and per-headset addressable gain require suitable **real** producer APIs; these fields currently show UNKNOWN/NOT_AVAILABLE. The operator must validate glyph legibility, colours, refresh rate and service ownership on physical ST7789 before enabling v2 at boot. Do not claim production-ready status UI yet.
+
+## Approved visual redesign — implemented in the actual C renderer
+
+The operator approved a four-state dark-blue, cyan/green/red ST7789 design and explicitly replaced the ordinary headset pictogram with a **happy brown bear wearing blue full-size over-ear headphones**. This is implemented by native RGB565 `happy_bear()` drawing primitives in `screensaver/build-status-v2.py`; it is not a UI-only concept image and does not require an external font or PNG decoder.
+
+The optional v2 now selects distinct 320x240 screens based on validated state:
+- **Intercom:** side-by-side AIRIDE and UGREEN cards with one smiling headphone bear each, colour-coded connection indication, known HFP/A2DP profile, battery, RSSI and volume; footer mode/network/BT.
+- **Radio:** smiling headphone bear, radio state, frequency `--` unless supplied as genuine telemetry. No fabricated MHz/RDS.
+- **Games:** smiling headphone bear, validated GAME mode; no fake game titles.
+- **System:** legible Core mode/voice/network/BT counts/radio/health.
+- **Warning overlay:** red warning panel with headphone bear and validated fault token; overrides the ordinary mode screen for faults other than initial CORE_OFFLINE.
+
+The top bar uses the real local clock. The numeric bitmap font now supports percent signs. Available status data are real observations only; the illustration approval's sample signal percentages, device IP, battery and frequency were illustrative and are NOT injected as fake live data.
+
+CI `tests/test_display_status_v2.py` compares actual rendered 320x240 PPM frames for intercom/radio/game/system/fault, and checks that varied status data change the resulting image. Physical ST7789 visual QA remains pending until the owner returns.
