@@ -56,4 +56,12 @@ with tempfile.TemporaryDirectory(prefix="mt-status-v2-") as temp:
     assert malformed!=detailed
     fault=preview(known.replace("fault=NONE","fault=BT_FAILED"),"fault.ppm")
     assert fault!=detailed,"fault banner must be visibly distinct"
-    print("PASS ST7789 v2 320x240 profile/volume/battery/RSSI cards and strict invalid fallback")
+    radio=preview(known.replace("mode=UNKNOWN","mode=RADIO"),"radio.ppm")
+    game=preview(known.replace("mode=UNKNOWN","mode=GAME"),"game.ppm")
+    intercom=preview(known.replace("mode=UNKNOWN","mode=INTERCOM"),"intercom.ppm")
+    system=preview(known.replace("bt_connected=2","bt_connected=0"),"system.ppm")
+    assert len({radio,game,intercom,system,fault})==5, "each approved screen must differ"
+    assert detailed==intercom, "observed connected headsets should show card dashboard"
+    source=(SAVER/"build-status-v2.py").read_text()
+    assert "happy_bear" in source and "render_game_v2" in source
+    print("PASS ST7789 v2 320x240 four modes, smiling headphone bear, strict status fallback")
